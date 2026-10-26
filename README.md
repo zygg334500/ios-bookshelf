@@ -42,7 +42,7 @@ npx expo start --web --port 43123
 
 安装包需要自带 Tcl/Tk。python.org 的安装程序默认勾选。
 
-窗口打开后会搜索 `_bookshelf._tcp`。搜到 0 台时，把手机屏幕上的 IP、端口（默认 27780）和 4 位配对码填进「手工填写」。配对码不在 Bonjour 广播里。可以选 pdf、epub、azw3、azw、mobi、kf8。无 DRM 的 Kindle 文件在找到 Calibre 的 `ebook-convert` 时会先转成 EPUB；没找到就原样发送。有 DRM 的文件会停住并说明原因，不会去解除保护。进度条按文件字节前进。
+窗口打开后会搜索 `_bookshelf._tcp`。搜到 0 台时，把手机屏幕上的 IP、端口（默认 27780）和 4 位配对码填进「手工填写」。配对码不在 Bonjour 广播里。可以选 pdf、epub、azw3、azw、mobi、kf8。无 DRM 的 Kindle 文件会先转成 EPUB 再发送：能解析的在本机并行转换，解析不了的再用官方 Calibre。Windows 会优先使用 `C:\Program Files\Calibre2\ebook-convert.exe`（不必在 PATH 里）。有 DRM 的文件会停住并说明原因，不会去解除保护。转换进度和发送进度分开显示。
 
 没有手机时，可以先开一个模拟收书服务，确认窗口能传文件：
 
@@ -114,7 +114,8 @@ Bundle ID 默认是 `com.fengyang.bookshelf`。要改的话，改 `app/app.json`
 - 文件头里的加密类型不是 0：界面显示「此文件受数字版权保护（DRM）」，并停住。
 - 程序没有解密步骤，也不包含任何解除 Kindle 保护的代码。
 - PalmDOC 压缩是公开的打包方式。KF8 的骨架和片段会拼回 HTML 再阅读。
-- 安装了 Calibre 时，BookPush 会先把无 DRM 的 AZW3 转成 EPUB。没装 Calibre 就直接把原文件交给手机，并在窗口里说明。
+- BookPush 默认把无 DRM 的 AZW3 转成 EPUB 再传。本机快路径能解析的书不启动 Calibre；解析不了时才调用官方 Calibre。没装 Calibre 且快路径失败时，这一本跳过，并说明去 https://calibre-ebook.com/ 安装，不要安装 DeDRM。
+- 同一内容再传一次会用缓存，不再转换。缓存按文件内容哈希，多本同时转，CPU 有几核就开几个进程。
 - Huff/CDIC 压缩和 KFX 会提示暂不支持，同样不会去绕过保护。
 - 请改用你有权阅读的 EPUB 或 PDF，或使用 Amazon 自己的阅读器。不要为了打开受保护的书去找破解工具。
 
@@ -144,6 +145,18 @@ Expo Go 没有 TCP 和 Bonjour，不能用来验证传书。必须是上面的 I
 6. 手机书架应显示这四本，标题能读。用搜索框按书名、作者或文件名过滤，排序可以换成书名、作者、进度或最近读过。再点一次「移出」可以拿走其中一本，其余还在。
 7. 逐本打开。中文应是字形而不是方框：《窗下》能看到「雨下到后半夜」；打开「竖排」后直行仍有字。再打开「简转繁」，繁体样本能看到「窗下有雨」。英文 PDF 能看到 “Notes from a paper shelf”，不是空白页。无 DRM 的 AZW3 能看到「没有数字版权保护」。左右翻页后字形还在。书架上能按未读、阅读中、已完成筛选。
 8. 若另有一本受保护的 AZW3，和别的书一起传：受保护的那本失败并写明「受数字版权保护」，其余书仍然送到。页面上没有破解提示。
+
+### Windows 手测：AZW3 转 EPUB
+
+在装了官方 Calibre 的 Windows 上再核对这些（Calibre 在 `C:\Program Files\Calibre2\ebook-convert.exe`，不必加入 PATH）：
+
+1. 打开 BookPush。ebook-convert 一栏应自动出现 `C:\Program Files\Calibre2\ebook-convert.exe`。日志里写的是官方 Calibre，没有 DeDRM。
+2. 准备三四本内容不同的无 DRM AZW3（只改文件名、字节完全一样会合成一次转换），再加一本 PDF 和一本 EPUB，一次加入队列。`samples\window-free.azw3` 可以当作其中一本。
+3. 点「开始传书」。转换一行应显示「正在转换 N/M」，并且多本同时转，而不是等一本结束再转下一本。PDF / EPUB 不占转换进度，发送一行单独显示「正在发送」。
+4. 手机书架里那几本 AZW3 应以 EPUB 打开，能看到「没有数字版权保护」。PDF、EPUB 内容和以前一样。
+5. 不改文件再传一次。日志应写「直接使用缓存的 EPUB」，转换几乎马上结束。
+6. 把 ebook-convert 路径改成一个不存在的文件，再传一本本机无法解析的 AZW（或暂时改掉 Calibre 路径后传一本 Huff/CDIC 书）。这一本失败，中文说明里有 https://calibre-ebook.com/ ，并写明不要安装 DeDRM。队列里的其他书继续送到。
+7. 把路径改回 `C:\Program Files\Calibre2\ebook-convert.exe`。准备一本有 DRM 的 AZW3 和一本正常 EPUB 一起传：受保护的那本失败并写明不会解除保护，EPUB 仍然送到。窗口里没有破解步骤。
 
 电脑上可以先跑自动检查，再做上面的手测：
 
