@@ -222,7 +222,7 @@ export function ReaderPane({
       <WebView<{ marker?: true }>
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: 'about:blank' }}
         onMessage={(event: WebViewMessageEvent) => handleRaw(event.nativeEvent.data)}
         onLoad={() => {
           readyRef.current = false;
@@ -237,10 +237,16 @@ export function ReaderPane({
         showsHorizontalScrollIndicator={false}
         setSupportMultipleWindows={false}
         textInteractionEnabled={false}
-        style={styles.web}
+        style={[styles.web, { backgroundColor: paperColor(settings.theme) }]}
       />
     </View>
   );
+}
+
+function paperColor(theme: string): string {
+  if (theme === 'dark') return '#1c1a17';
+  if (theme === 'light') return '#fbfbf8';
+  return '#f4ecd8';
 }
 
 const styles = StyleSheet.create({

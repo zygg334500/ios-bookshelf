@@ -6,13 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { shelfCountLabel, summarizeImports, type ImportAttempt } from '../core/shelf';
+import { filterAndSortBooks, shelfCountLabel, summarizeImports, type ImportAttempt, type ShelfSort } from '../core/shelf';
 import { useLibrary, type ShelfBook } from '../storage/library';
 import { readAssetBytes } from '../reader/assets';
 import { bundledSamples } from '../ui/samples';
@@ -26,6 +27,16 @@ export default function LibraryScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ShelfSort>('recent');
+  const visibleBooks = filterAndSortBooks(library.books, query, sort);
+  const sortChoices: { id: ShelfSort; label: string }[] = [
+    { id: 'recent', label: '最近加入' },
+    { id: 'title', label: '书名' },
+    { id: 'author', label: '作者' },
+    { id: 'progress', label: '进度' },
+    { id: 'opened', label: '最近读过' },
+  ];
   const columns = width >= 1100 ? 6 : width >= 840 ? 5 : width >= 640 ? 4 : 3;
   const gap = 16;
   const itemWidth = Math.floor((Math.min(width, 1200) - 36 - gap * (columns - 1)) / columns);
@@ -113,7 +124,13 @@ export default function LibraryScreen() {
           <Text style={styles.kicker}>BOOKSHELF</Text>
           <Text style={styles.title}>书架</Text>
           <Text style={styles.sub}>离线阅读。PDF、EPUB，以及没有 DRM 的 AZW3。</Text>
-          <Text style={styles.sub}>{library.ready ? shelfCountLabel(library.books.length) : '正在打开书架…'}</Text>
+          <Text style={styles.sub}>
+            {library.ready
+              ? query.trim()
+                ? `架上 ${library.books.length} 本，符合 ${visibleBooks.length} 本。`
+                : shelfCountLabel(library.books.length)
+              : '正在打开书架…'}
+          </Text>
         </View>
       </View>
       <View style={styles.actions}>
@@ -136,6 +153,26 @@ export default function LibraryScreen() {
           <Text style={styles.emptyBody}>正在打开书架…</Text>
         </View>
       ) : null}
+      {library.ready && library.books.length > 0 ? (
+        <View style={styles.searchBlock}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="搜索书名、作者或文件名"
+            placeholderTextColor={shelf.muted}
+            style={styles.search}
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+          <View style={styles.sortRow}>
+            {sortChoices.map((choice) => (
+              <Pressable key={choice.id} onPress={() => setSort(choice.id)} style={[styles.sortChip, sort === choice.id && styles.sortChipOn]}>
+                <Text style={[styles.sortText, sort === choice.id && styles.sortTextOn]}>{choice.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
       {library.ready && library.books.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>还没有书</Text>
@@ -143,9 +180,14 @@ export default function LibraryScreen() {
             可以从这台设备导入，也可以先放入内置示例，看看翻页、字体和竖排繁体。装到 iPhone 之后，用 Windows 的 BookPush 经家里的 Wi-Fi 把书送进来。
           </Text>
         </View>
+      ) : visibleBooks.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>没有符合的书</Text>
+          <Text style={styles.emptyBody}>换一个书名、作者或文件名再搜。架子上的书还在。</Text>
+        </View>
       ) : (
         <View style={[styles.grid, { gap }]}>
-          {library.books.map((book) => (
+          {visibleBooks.map((book) => (
             <View key={book.id} style={{ width: itemWidth }}>
               <Pressable onPress={() => router.push(`/read/${book.id}`)} onLongPress={() => askRemove(book)}>
                 <Cover book={book} width={itemWidth} />
@@ -238,6 +280,21 @@ const styles = StyleSheet.create({
   },
   secondaryText: { color: shelf.ink, fontFamily: fonts.ui, fontSize: 15 },
   message: { color: shelf.ink, fontFamily: fonts.ui, marginBottom: 12, lineHeight: 22 },
+  searchBlock: { marginBottom: 14, gap: 8 },
+  search: {
+    backgroundColor: shelf.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: fonts.ui,
+    fontSize: 16,
+    color: shelf.ink,
+  },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sortChip: { borderWidth: 1, borderColor: shelf.line, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: shelf.card },
+  sortChipOn: { borderColor: shelf.accent, backgroundColor: 'rgba(142,47,42,0.12)' },
+  sortText: { fontFamily: fonts.ui, color: shelf.ink, fontSize: 13 },
+  sortTextOn: { color: shelf.accent },
   empty: {
     backgroundColor: shelf.card,
     borderRadius: 18,

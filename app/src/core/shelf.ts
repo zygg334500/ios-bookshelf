@@ -27,3 +27,30 @@ export function shelfCountLabel(count: number): string {
   if (count <= 0) return '架上还没有书。';
   return `架上 ${count} 本。点封面打开，点「移出」再点一次确认拿走。`;
 }
+
+export type ShelfSort = 'recent' | 'title' | 'author' | 'progress' | 'opened';
+
+export type ShelfEntry = {
+  title: string;
+  author: string;
+  fileName: string;
+  addedAt: number;
+  progress: number;
+  lastOpenedAt: number | null;
+};
+
+export function filterAndSortBooks<T extends ShelfEntry>(books: T[], query: string, sort: ShelfSort): T[] {
+  const needle = query.trim().toLocaleLowerCase();
+  const matched = needle
+    ? books.filter((book) => `${book.title}\n${book.author}\n${book.fileName}`.toLocaleLowerCase().includes(needle))
+    : books.slice();
+  const copy = needle ? matched.slice() : matched;
+  copy.sort((a, b) => {
+    if (sort === 'title') return a.title.localeCompare(b.title, 'zh') || b.addedAt - a.addedAt;
+    if (sort === 'author') return a.author.localeCompare(b.author, 'zh') || a.title.localeCompare(b.title, 'zh');
+    if (sort === 'progress') return b.progress - a.progress || b.addedAt - a.addedAt;
+    if (sort === 'opened') return (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0) || b.addedAt - a.addedAt;
+    return b.addedAt - a.addedAt;
+  });
+  return copy;
+}

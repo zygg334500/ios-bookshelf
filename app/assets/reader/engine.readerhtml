@@ -14,7 +14,7 @@
   html, body { margin: 0; height: 100%; background: var(--paper, #f4ecd8); color: var(--ink, #2a241c); overflow: hidden; }
   #stage { position: relative; height: 100%; perspective: 1800px; touch-action: none; user-select: none; -webkit-user-select: none; }
   .sheet { position: absolute; inset: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
-  #leaf { transform-origin: left center; transform-style: preserve-3d; z-index: 2; box-shadow: 0 0 0 rgba(0,0,0,0); }
+  #leaf { transform-origin: left center; z-index: 2; box-shadow: 0 0 0 rgba(0,0,0,0); }
   #under { z-index: 1; }
   #shade { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; }
   .pad { position: absolute; inset: 28px 26px 36px; overflow: hidden; }
@@ -26,8 +26,16 @@
     word-break: break-word;
     overflow-wrap: anywhere;
     -webkit-text-size-adjust: 100%;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
-  .prose, .prose * { font-family: var(--font) !important; color: var(--ink) !important; }
+  .prose, .prose * {
+    font-family: var(--font) !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
   .vertical, .vertical * { writing-mode: vertical-rl !important; text-orientation: mixed !important; }
   .vertical .folio { writing-mode: horizontal-tb !important; }
   .prose p { margin: 0 0 0.85em; }
@@ -335,10 +343,22 @@
     showHtml(state.chapter, state.page, dest);
   }
 
-  function commit(dest) {
+  function restLeaf() {
     leaf.style.transition = 'none';
     leaf.style.transform = 'none';
+    leaf.style.webkitTransform = 'none';
+    leaf.style.transformStyle = 'flat';
+    leaf.style.webkitTransformStyle = 'flat';
     shade.style.opacity = '0';
+  }
+
+  function armCurl() {
+    leaf.style.transformStyle = 'preserve-3d';
+    leaf.style.webkitTransformStyle = 'preserve-3d';
+  }
+
+  function commit(dest) {
+    restLeaf();
     if (!dest) {
       if (state.kind === 'pdf') renderPdf(state.page + 1, frontCanvas);
       else showHtml(state.chapter, state.page, null);
@@ -364,6 +384,7 @@
       var maxH = wrap.clientHeight || stage.clientHeight - 64;
       var base = page.getViewport({ scale: 1 });
       var scale = Math.min(maxW / base.width, maxH / base.height);
+      if (!isFinite(scale) || scale <= 0) scale = 1;
       var viewport = page.getViewport({ scale: scale });
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
@@ -521,10 +542,10 @@
     var dir = dx < 0 ? 1 : -1;
     var dest = neighbor(dir);
     if (!dest) {
-      shade.style.opacity = '0';
-      leaf.style.transform = 'none';
+      restLeaf();
       return;
     }
+    armCurl();
     if (!drag.painted || drag.dir !== dir) {
       drag.dir = dir;
       drag.painted = true;
@@ -554,9 +575,10 @@
       var x = start.x / width;
       if (x < 0.22) turn(-1);
       else if (x > 0.78) turn(1);
-      else post({ type: 'chrome' });
-      leaf.style.transform = 'none';
-      shade.style.opacity = '0';
+      else {
+        post({ type: 'chrome' });
+        restLeaf();
+      }
       return;
     }
     var dir = dx < 0 ? 1 : -1;
@@ -564,10 +586,10 @@
     var should = dest && (Math.abs(dx) > width * 0.22 || Math.abs(flick) > 0.65);
     leaf.style.transition = 'transform 420ms cubic-bezier(.2,.7,.2,1), box-shadow 420ms ease';
     if (!should) {
-      leaf.style.transform = 'none';
-      shade.style.opacity = '0';
+      restLeaf();
       return;
     }
+    armCurl();
     state.busy = true;
     var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
     var angle = vertical ? dir * 62 : dir * -62;
@@ -585,6 +607,7 @@
     var dest = neighbor(dir);
     if (!dest || state.busy) return;
     paintDestination(dest);
+    armCurl();
     state.busy = true;
     var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
     leaf.style.transition = 'transform 460ms cubic-bezier(.2,.7,.2,1)';

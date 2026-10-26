@@ -11,7 +11,10 @@ describe('reader engine', () => {
     expect(html).toContain('Noto Serif CJK SC');
     expect(html).toContain('font-family: var(--font) !important');
     expect(html).toContain('color: var(--ink) !important');
+    expect(html).toContain('-webkit-text-fill-color: var(--ink) !important');
     expect(html).toContain('writing-mode: vertical-rl');
+    expect(html).not.toMatch(/transform-style:\s*preserve-3d/);
+    expect(html).toContain("transformStyle = 'flat'");
   });
 
   it('drops blank pages and still hides the opening overlay', () => {

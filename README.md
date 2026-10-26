@@ -38,13 +38,9 @@ npx expo start --web --port 43123
 
 安装 Python 3.11 或更新版本，安装时勾选 **tcl/tk**（python.org 的安装包默认带）。
 
-```bat
-cd windows\BookPush
-py -3 -m pip install -r requirements.txt
-py -3 -m bookpush
-```
+双击 `windows\BookPush\run.bat`（或 `run.ps1`）。脚本先找 `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`，也认 313 / 311 / 310，找不到才试 `py -3` 和 `python`。这台电脑没有 py 启动器时也能打开。也可以把 python.exe 的完整路径放进环境变量 `BOOKSHELF_PYTHON`。
 
-也可以双击 `run.bat`。
+安装包需要自带 Tcl/Tk。python.org 的安装程序默认勾选。
 
 窗口打开后会搜索 `_bookshelf._tcp`。搜到 0 台时，把手机屏幕上的 IP、端口（默认 27780）和 4 位配对码填进「手工填写」。配对码不在 Bonjour 广播里。可以选 pdf、epub、azw3、azw、mobi、kf8。无 DRM 的 Kindle 文件在找到 Calibre 的 `ebook-convert` 时会先转成 EPUB；没找到就原样发送。有 DRM 的文件会停住并说明原因，不会去解除保护。进度条按文件字节前进。
 
@@ -143,9 +139,9 @@ Expo Go 没有 TCP 和 Bonjour，不能用来验证传书。必须是上面的 I
 1. 用上一节的 Actions 产物，经 Sideloadly 和免费 Apple ID 装进 iPhone。
 2. 打开「设置 → 通用 → VPN 与设备管理」，信任刚才的描述文件。
 3. 打开 BookShelf，进入「Wi-Fi 传书」，点允许「本地网络」。屏幕上会有 IP、端口和 4 位配对码。
-4. Windows 打开 BookPush。同一 Wi-Fi，关掉 VPN，不要用访客网络。搜到手机就选中；列表是 0 台就把那三项填进「手工填写」。防火墙询问时允许 Python 访问专用网络（UDP 5353 和到手机端口的 TCP）。
+4. 双击 `windows\BookPush\run.bat` 打开 BookPush（没有 py 启动器也会找 Python312）。同一 Wi-Fi，关掉 VPN，不要用访客网络。搜到手机就选中；列表是 0 台就把那三项填进「手工填写」。防火墙询问时允许 Python 访问专用网络（UDP 5353 和到手机端口的 TCP）。
 5. 在 BookPush 里一次加入 `samples/` 的四本：`window.epub`、`vertical-traditional.epub`、`notes.pdf`、`window-free.azw3`。确认列表是 4 本，移出再加回一本，然后开始传书。
-6. 手机书架应显示这四本，标题能读。再点一次「移出」可以拿走其中一本，其余还在。
+6. 手机书架应显示这四本，标题能读。用搜索框按书名、作者或文件名过滤，排序可以换成书名、作者、进度或最近读过。再点一次「移出」可以拿走其中一本，其余还在。
 7. 逐本打开。中文应是字形而不是方框：《窗下》能看到「雨下到后半夜」；打开「竖排繁体」后直行仍有字，繁体样本能看到「窗下有雨」。英文 PDF 能看到 “Notes from a paper shelf”，不是空白页。无 DRM 的 AZW3 能看到「没有数字版权保护」。左右翻页后字形还在。
 8. 若另有一本受保护的 AZW3，和别的书一起传：受保护的那本失败并写明「受数字版权保护」，其余书仍然送到。页面上没有破解提示。
 
@@ -155,7 +151,7 @@ Expo Go 没有 TCP 和 Bonjour，不能用来验证传书。必须是上面的 I
 cd app
 npm test
 cd ..\windows\BookPush
-py -3 -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 cd ..\..
 node scripts\verify-reader-glyphs.mjs
 ```
@@ -176,9 +172,8 @@ npx tsc --noEmit
 npx expo start --web --port 43123
 
 cd ..\windows\BookPush
-py -3 -m pip install -r requirements.txt
-py -3 -m bookpush
-py -3 -m unittest discover -s tests -v
+run.bat
+python -m unittest discover -s tests -v
 ```
 
 重新生成示例文件：
