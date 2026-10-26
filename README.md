@@ -116,6 +116,8 @@ Bundle ID 默认是 `com.fengyang.bookshelf`。要改的话，改 `app/app.json`
 - PalmDOC 压缩是公开的打包方式。KF8 的骨架和片段会拼回 HTML 再阅读。
 - BookPush 默认把无 DRM 的 AZW3 转成 EPUB 再传。本机快路径能解析的书不启动 Calibre；解析不了时才调用官方 Calibre。没装 Calibre 且快路径失败时，这一本跳过，并说明去 https://calibre-ebook.com/ 安装，不要安装 DeDRM。
 - 同一内容再传一次会用缓存，不再转换。缓存按文件内容哈希，多本同时转，CPU 有几核就开几个进程。
+- 亚马逊的 AZW3 常常把 PalmDB 名字写成 `CR!` 开头，文件偏移 60 处仍是 `BOOKMOBI`。这不是 KFX，BookPush 会继续交给本机转换或官方 Calibre。真正的 KFX（没有 `BOOKMOBI`）仍会跳过。
+- 文件若只是 OneDrive 的「联机可用」占位符，读不到正文。窗口会请你在资源管理器里选择「始终保留在此设备上」，等下载完成后再传。云端上的原文件不会被改动。
 - Huff/CDIC 压缩和 KFX 会提示暂不支持，同样不会去绕过保护。
 - 请改用你有权阅读的 EPUB 或 PDF，或使用 Amazon 自己的阅读器。不要为了打开受保护的书去找破解工具。
 

@@ -26,6 +26,7 @@ from bookpush.kindle import (
     DRM_MESSAGE,
     KFX_MESSAGE,
     KINDLE_SUFFIXES,
+    explain_read_error,
     find_converter,
     refuse_protected,
 )
@@ -117,7 +118,7 @@ def convert_batch(
         try:
             data = path.read_bytes()
         except OSError as error:
-            publish(index, BatchItem(path, False, None, detail=f"读不到文件：{error}"))
+            publish(index, BatchItem(path, False, None, detail=explain_read_error(error)))
             mark(path.name)
             continue
         try:
@@ -174,6 +175,18 @@ def convert_batch(
                     path,
                     digest,
                     BatchItem(path, False, None, detail=str(result.get("message") or KFX_MESSAGE)),
+                    waiting,
+                    publish,
+                    mark,
+                )
+            elif status == "read":
+                _share(
+                    files,
+                    work_dir,
+                    index,
+                    path,
+                    digest,
+                    BatchItem(path, False, None, detail=str(result.get("message") or "读不到文件。")),
                     waiting,
                     publish,
                     mark,

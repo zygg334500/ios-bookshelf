@@ -64,7 +64,12 @@ def upload_book(
     timeout: float = 180,
 ) -> dict:
     boundary = "----BookShelfBoundary7f3a9c"
-    body = build_body(file_path, pin, boundary)
+    try:
+        body = build_body(file_path, pin, boundary)
+    except OSError as error:
+        from bookpush.kindle import explain_read_error
+
+        raise UploadError(explain_read_error(error)) from error
     connection = http.client.HTTPConnection(host, int(port), timeout=timeout)
     try:
         connection.putrequest("POST", "/v1/books")
