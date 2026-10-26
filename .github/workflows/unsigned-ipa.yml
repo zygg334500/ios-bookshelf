@@ -2,6 +2,10 @@ name: Unsigned iOS IPA
 
 on:
   workflow_dispatch:
+  # Push is included so a contents-only token can start this build.
+  # workflow_dispatch remains the way to rebuild from the Actions tab.
+  push:
+    branches: [main]
 
 jobs:
   ipa:
