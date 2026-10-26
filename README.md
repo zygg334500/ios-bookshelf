@@ -28,7 +28,7 @@ npm test
 npx expo start --web --port 43123
 ```
 
-浏览器打开 `http://127.0.0.1:43123`。点「放入示例」，打开《窗下》，试翻页、字号、苹方/宋体/楷体，以及「竖排繁体」。
+浏览器打开 `http://127.0.0.1:43123`。点「放入示例」，打开《窗下》，试翻页、字号、行距、苹方/宋体/黑体/楷体/圆体，以及竖排和简转繁。
 
 这一步只是界面。浏览器**不能**代替手机收书：网页里没有局域网监听。示例书是仓库里的原创短篇，不是出版图书。
 
@@ -118,14 +118,14 @@ Bundle ID 默认是 `com.fengyang.bookshelf`。要改的话，改 `app/app.json`
 - Huff/CDIC 压缩和 KFX 会提示暂不支持，同样不会去绕过保护。
 - 请改用你有权阅读的 EPUB 或 PDF，或使用 Amazon 自己的阅读器。不要为了打开受保护的书去找破解工具。
 
-PDF 是固定版式，竖排和简转繁对它不起作用。中文排版在 EPUB 和可解析的 AZW3 里。阅读器强制使用苹方、宋体、楷体和 Noto / 思源这一组中文字体，避免正文被写成空白。目录和书签在阅读页里。进度记章节、页码和 0 到 1 的位置。
+PDF 是固定版式，竖排和简转繁对它不起作用。中文排版在 EPUB 和可解析的 AZW3 里。阅读器可以使用系统字体、苹方、宋体、黑体、楷体、圆体，并回退到 Noto / 思源，避免正文被写成空白。字号、行距、边距、对齐（左对齐 / 两端 / 居中）、日间 / 羊皮纸 / 夜间可以分开调。竖排和简转繁也是两个开关。排版可以只留给这一本，也可以用到全部书籍，关掉 App 之后还在。目录和书签在阅读页里。进度记章节、页码和 0 到 1 的位置。读到最后一页，书架上是「已完成」；刚放上、还没打开是「未读」；打开之后是「阅读中」。也可以手动「标为读完」或「标为在读」。
 
 ## 能打开什么
 
 | 内容 | 结果 |
 | --- | --- |
 | PDF | 能读。固定版式，不重排，竖排和简转繁对它不起作用。 |
-| EPUB | 能读。折页、字号、白 / 羊皮纸 / 夜、亮度、竖排繁体、目录、书签、进度。 |
+| EPUB | 能读。滑动翻页、字号、行距、边距、对齐、日间 / 羊皮纸 / 夜间、亮度、竖排、简转繁、目录、书签、进度。 |
 | 无 DRM 的 AZW3、KF8、MOBI、AZW、PRC | 能读。PalmDOC 按记录解压，KF8 拼回骨架和片段。 |
 | Huff/CDIC、KFX | 中文提示暂不支持，不解码，也不解除保护。 |
 | 有 DRM 的 AZW3 | 停在「受数字版权保护」。没有解密步骤。 |
@@ -142,7 +142,7 @@ Expo Go 没有 TCP 和 Bonjour，不能用来验证传书。必须是上面的 I
 4. 双击 `windows\BookPush\run.bat` 打开 BookPush（没有 py 启动器也会找 Python312）。同一 Wi-Fi，关掉 VPN，不要用访客网络。搜到手机就选中；列表是 0 台就把那三项填进「手工填写」。防火墙询问时允许 Python 访问专用网络（UDP 5353 和到手机端口的 TCP）。
 5. 在 BookPush 里一次加入 `samples/` 的四本：`window.epub`、`vertical-traditional.epub`、`notes.pdf`、`window-free.azw3`。确认列表是 4 本，移出再加回一本，然后开始传书。
 6. 手机书架应显示这四本，标题能读。用搜索框按书名、作者或文件名过滤，排序可以换成书名、作者、进度或最近读过。再点一次「移出」可以拿走其中一本，其余还在。
-7. 逐本打开。中文应是字形而不是方框：《窗下》能看到「雨下到后半夜」；打开「竖排繁体」后直行仍有字，繁体样本能看到「窗下有雨」。英文 PDF 能看到 “Notes from a paper shelf”，不是空白页。无 DRM 的 AZW3 能看到「没有数字版权保护」。左右翻页后字形还在。
+7. 逐本打开。中文应是字形而不是方框：《窗下》能看到「雨下到后半夜」；打开「竖排」后直行仍有字。再打开「简转繁」，繁体样本能看到「窗下有雨」。英文 PDF 能看到 “Notes from a paper shelf”，不是空白页。无 DRM 的 AZW3 能看到「没有数字版权保护」。左右翻页后字形还在。书架上能按未读、阅读中、已完成筛选。
 8. 若另有一本受保护的 AZW3，和别的书一起传：受保护的那本失败并写明「受数字版权保护」，其余书仍然送到。页面上没有破解提示。
 
 电脑上可以先跑自动检查，再做上面的手测：
@@ -158,9 +158,19 @@ node scripts\verify-reader-glyphs.mjs
 
 最后一条需要本机的 Chrome，用来确认示例书的中文、英文和竖排真的画出来了，而不是空白页。没有 Chrome 时，前两条测试仍然检查解析出的正文。
 
-竖排繁体使用 CSS `writing-mode: vertical-rl`。简体正文会按 OpenCC 字词表显示成繁体，原文件不改。个别多义字可能选错，这是显示转换的限制。
+竖排使用 CSS `writing-mode: vertical-rl`，和简转繁分开。简体正文只有在打开「简转繁」时才按 OpenCC 字词表显示成繁体，原文件不改。个别多义字可能选错，这是显示转换的限制。
 
-翻页是 WebView 里的透视折页（大约 62 度再揭开下一页），用来接近翻书，不是 UIKit 的 `pageCurl`。React Native 里没有那套转场。
+翻页是 WebView 里跟手的横滑，松手后大约 260 毫秒落到下一页。每一帧只改 `translate3d`，走合成器，不再做透视折页。透视 `rotateY` 会让整页重绘，中端手机上容易掉帧。菜单的出现和隐藏用 React Native 的 `Animated`（`useNativeDriver: true`），打开菜单不再改 WebView 的高度，所以正文不会跟着重排。书架用 `FlatList`，只挂屏幕里的几本。
+
+## iPhone 16e 手测
+
+16e 的逻辑分辨率是 390×844。竖屏安全区大约是顶部 59（灵动岛）和底部 34（Home Indicator），横屏时岛在一侧、底部大约 21。装上未签名 IPA 之后，用同一台手机看这几项：
+
+1. **翻页**：左右滑动要跟手，松手后很快落到下一页，连续翻二十页不卡顿。点左右两侧翻页，点中间收起菜单。竖排时向左滑、或点左侧，进入下一页。PDF、EPUB、无 DRM 的 AZW3 都能翻。有 DRM 的 AZW3 仍停在说明上，没有解密。
+2. **字体**：系统、苹方、宋体、黑体、楷体、圆体都是字形，不是方框。字号、行距、边距、左对齐 / 两端 / 居中、日间 / 羊皮纸 / 夜间都生效。竖排和简转繁可以单独开关。点「仅本书」改字号后，另一本仍用「全部书籍」的字号；完全退出再打开，两套都还在。
+3. **安全区**：顶部按钮贴在灵动岛下面，不要钻进岛里，也不要空出一大截。正文第一行在岛和状态栏下面。页码和底部菜单在 Home Indicator 上面。打开或关闭菜单时，正文不跳动、不重排。横屏时左右不被圆角和岛挡住。
+4. **状态**：没打开过是「未读」，读过是「阅读中」，读到最后一页或点「标为读完」是「已完成」。书架可以按这三项筛选，并和原来的排序一起用。「标为在读」能把已完成改回去。
+5. **滚动**：书架书多的时候上下滑顺；阅读页连续翻页保持顺滑。
 
 ## 常用命令
 
@@ -185,4 +195,4 @@ py -3 samples\make_samples.py
 
 ## English
 
-BookShelf is an offline Expo reader plus a Windows LAN pusher. Build an unsigned IPA with the GitHub Action `Unsigned iOS IPA`, then install it on Windows with Sideloadly and a free Apple ID. Refresh the signature about every 7 days. Do not buy the Apple Developer Program and do not ship to the App Store. AZW3 support is DRM-free only; encrypted files are refused and never decrypted. Details of the page fold, OpenCC vertical text, and the `POST /v1/books` protocol are in `ARCHITECTURE.md`.
+BookShelf is an offline Expo reader plus a Windows LAN pusher. Build an unsigned IPA with the GitHub Action `Unsigned iOS IPA`, then install it on Windows with Sideloadly and a free Apple ID. Refresh the signature about every 7 days. Do not buy the Apple Developer Program and do not ship to the App Store. AZW3 support is DRM-free only; encrypted files are refused and never decrypted. Page turns are a compositor `translate3d` slide. Typography, iPhone 16e safe areas, reading status, and the `POST /v1/books` protocol are in `ARCHITECTURE.md`.

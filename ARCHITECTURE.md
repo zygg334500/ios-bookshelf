@@ -21,26 +21,32 @@ Windows 上开发和预览界面。iPhone 上的安装包由云端 Mac 编译成
 
 AZW3 **不会**实现 DRM 解除。加密样本在解析前就抛出 `BookError('DRM')`，界面写明文件受数字版权保护。BookPush 若找到 Calibre 的 `ebook-convert`，会把无 DRM 的 AZW3 转成 EPUB 再传；没有转换器就原样发送，并由手机按上面的规则打开。
 
-简转繁只发生在打开阅读器、并且打开了「竖排繁体」的时候。用的是 OpenCC 的 `STCharacters.txt` 与 `STPhrases.txt`，最长匹配。原文件不改。多义字取表里的第一项，所以「发」一类的字可能不是期望的那个。
+简转繁只发生在打开阅读器、并且打开了「简转繁」的时候，和竖排无关。用的是 OpenCC 的 `STCharacters.txt` 与 `STPhrases.txt`，最长匹配。原文件不改。多义字取表里的第一项，所以「发」一类的字可能不是期望的那个。旧设置里的 `verticalTraditional: true` 会同时打开竖排和简转繁。
 
 ## 翻页
 
-阅读器是一份放在 WebView（网页预览里是 iframe）里的 HTML。EPUB/AZW3 先按当前字号、字体和竖排模式把章节切成页；PDF 一页一个 canvas。
+阅读器是一份放在 WebView（网页预览里是 iframe）里的 HTML。EPUB/AZW3 先按当前字号、字体、行距、边距、对齐和竖排把章节切成页；PDF 一页一个 canvas。
 
-翻页是透视 `rotateY` 折页，加上阴影，不是 iOS `UIPageViewController` 的 `.pageCurl`。React Native 里没有那个 UIKit 转场。折页大约转到 62 度后换页，避免 180 度翻转把背面盖住下一页。横排时书脊在左；竖排（`writing-mode: vertical-rl`）时书脊在右，向左翻是下一页。
+翻页是跟手的 `translate3d` 横滑。手指移动时只改当前页的位移；松手后用 `requestAnimationFrame` 做大约 260 毫秒的 ease-out，再换页。不使用透视 `rotateY`。那条路径会让 WKWebView 整页重绘，中端手机上帧率不稳。React Native 里也没有 UIKit 的 `pageCurl`，所以没有再包一层 3D。菜单用 `Animated` 且 `useNativeDriver: true`，WebView 尺寸在菜单开关时不变，避免每次重排。
 
-点页面左右约 22% 也会翻页，点中间收起或唤出菜单。
+横排时向左滑是下一页，点右侧约 22% 也是下一页。竖排（`writing-mode: vertical-rl`，书脊在右）时向左滑、或点左侧，是下一页。点中间收起或唤出菜单。
+
+WebView 关掉了系统自动安全区（`contentInsetAdjustmentBehavior="never"`）。页边由页面自己留：顶部是安全区再加 36pt，给灵动岛和一行菜单；底部是安全区再加页码。iPhone 16e 竖屏大约是顶 59、底 34。不再把整段安全区叠两次，避免顶栏悬得太高。
 
 字体：
 
-- 系统：`-apple-system`，中文落到苹方
+- 系统：`-apple-system`，中文落到苹方；竖排时改用宋体
 - 苹方：`PingFang SC`
 - 宋体：`Songti SC` / `STSong`
+- 黑体：`Heiti SC` / `STHeiti`，没有黑体时落到苹方
 - 楷体：`Kaiti SC`
+- 圆体：`Yuanti SC`
 
-主题是白、羊皮纸、夜。纸面亮度是盖在 WebView 上的半透明黑，不改系统亮度。
+另外还有字号、行距、边距、对齐（左对齐 / 两端 / 居中）。主题是日间、羊皮纸、夜间。纸面亮度是盖在 WebView 上的半透明黑，不改系统亮度。竖排和简转繁分开。旧的 `verticalTraditional: true` 会同时打开这两项。
 
-位置记在 SQLite（网页预览失败时退回 localStorage）：章节、页码、0 到 1 的进度。书签是 settings 里的 JSON，按当前章节和页码切换，点目录里的书签会按进度跳回。
+排版存在 settings 的 `reader` 里：`global` 是全部书籍，`books` 按书 id 覆盖。没有单独排版的书用全局。
+
+位置记在 SQLite（网页预览失败时退回 localStorage）：章节、页码、0 到 1 的进度，以及 `reading_mark`（`auto` / `reading` / `finished`）。多页书的最后一页进度是 1。没打开过且进度为 0 是未读；打开过是阅读中；进度到头或标记为 finished 是已完成。`reading` 会压过“已经读完”的进度，方便标回在读。书签是 settings 里的 JSON，按当前章节和页码切换，点目录里的书签会按进度跳回。
 
 正文强制使用 `--font` 里的苹方、宋体和 Noto / 思源，避免 EPUB 自带的字体把中文画成空白。分页前用 DOMParser 取出 body；量不到页面尺寸时先整章显示，布局完成后再切页。空白页会被丢掉。
 

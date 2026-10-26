@@ -15,6 +15,7 @@ function book(id: string, title: string): BookRecord {
     pageIndex: 0,
     progress: 0,
     coverName: null,
+    readingMark: 'auto',
   };
 }
 
@@ -29,6 +30,8 @@ describe('MemoryLibrary', () => {
     expect(listed[0].chapterIndex).toBe(2);
     expect(listed[0].pageIndex).toBe(4);
     expect(listed[0].progress).toBeCloseTo(0.42);
+    await store.updateReadingMark('b', 'finished');
+    expect((await store.list())[0].readingMark).toBe('finished');
     await store.setSetting('pin', '2468');
     expect(await store.getSetting('pin')).toBe('2468');
     await store.remove('b');

@@ -6,9 +6,14 @@ describe('readingProgress', () => {
     expect(readingProgress(0, 0, 10, 4)).toBe(0);
   });
 
-  it('advances inside a chapter and across the book', () => {
+  it('advances inside a chapter and reaches 1 on the last page', () => {
     expect(readingProgress(1, 5, 10, 4)).toBeCloseTo(1.5 / 4);
-    expect(readingProgress(3, 9, 10, 4)).toBeCloseTo(3.9 / 4);
+    expect(readingProgress(3, 8, 10, 4)).toBeCloseTo(3.8 / 4);
+    expect(readingProgress(3, 9, 10, 4)).toBe(1);
+  });
+
+  it('leaves a single page at zero so a short note is not auto-finished', () => {
+    expect(readingProgress(0, 0, 1, 1)).toBe(0);
   });
 
   it('clamps empty books', () => {

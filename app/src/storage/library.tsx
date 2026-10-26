@@ -1,12 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { forgetBookmarks, parseBookmarks, toggleBookmark, type Bookmark } from '../core/bookmarks';
 import { createId } from '../core/progress';
 import { inspectBook } from '../core/inspect';
+import { normalizeReadingMark } from '../core/shelf';
+import { normalizeReaderSettings, parseReaderPrefs, type ReaderPrefs } from '../core/settings';
 import {
   defaultReaderSettings,
   type BookRecord,
   type LoadedBook,
   type ReaderSettings,
+  type ReadingMark,
 } from '../core/types';
 import { loadConverter } from '../reader/assets';
 import { coverUri, deleteBookFiles, readNamed, scanSharedDocuments, writeNamed } from './bytes';
@@ -22,6 +25,7 @@ type LibraryContextValue = {
   error: string | null;
   books: ShelfBook[];
   settings: ReaderSettings;
+  bookSettings: Record<string, ReaderSettings>;
   pin: string;
   deviceName: string;
   refresh: () => Promise<void>;
@@ -31,8 +35,10 @@ type LibraryContextValue = {
   removeBook: (id: string) => Promise<void>;
   loadBook: (id: string) => Promise<LoadedBook>;
   savePosition: (id: string, chapterIndex: number, pageIndex: number, progress: number) => Promise<void>;
+  markBook: (id: string, mark: ReadingMark) => Promise<void>;
   saveCover: (id: string, dataUrl: string) => Promise<void>;
-  updateSettings: (next: ReaderSettings) => Promise<void>;
+  updateSettings: (next: ReaderSettings, bookId?: string) => Promise<void>;
+  clearBookSettings: (bookId: string) => Promise<void>;
   updateDeviceName: (name: string) => Promise<void>;
   regeneratePin: () => Promise<void>;
   bookmarks: Record<string, Bookmark[]>;
@@ -53,7 +59,9 @@ async function withCovers(records: BookRecord[]): Promise<ShelfBook[]> {
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<LibraryStore | null>(null);
   const [books, setBooks] = useState<ShelfBook[]>([]);
-  const [settings, setSettings] = useState<ReaderSettings>(defaultReaderSettings);
+  const [prefs, setPrefs] = useState<ReaderPrefs>({ global: defaultReaderSettings, books: {} });
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
   const [pin, setPin] = useState('0000');
   const [deviceName, setDeviceName] = useState('书房');
   const [bookmarks, setBookmarks] = useState<Record<string, Bookmark[]>>({});
@@ -83,13 +91,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
           setPin(nextPin);
           setDeviceName(name);
           setBookmarks(parseBookmarks(rawBookmarks));
-          if (rawSettings) {
-            try {
-              setSettings({ ...defaultReaderSettings, ...JSON.parse(rawSettings) });
-            } catch {
-              setSettings(defaultReaderSettings);
-            }
-          }
+          const parsedPrefs = parseReaderPrefs(rawSettings);
+          prefsRef.current = parsedPrefs;
+          setPrefs(parsedPrefs);
           setBooks(await withCovers(await opened.list()));
           setReady(true);
         }
@@ -127,6 +131,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         pageIndex: 0,
         progress: 0,
         coverName,
+        readingMark: 'auto',
       };
       await store.insert(record);
       await refresh();
@@ -154,6 +159,15 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (!store) return;
       await store.remove(id);
       await deleteBookFiles(id);
+      const currentPrefs = prefsRef.current;
+      if (currentPrefs.books[id]) {
+        const books = { ...currentPrefs.books };
+        delete books[id];
+        const nextPrefs = { ...currentPrefs, books };
+        prefsRef.current = nextPrefs;
+        setPrefs(nextPrefs);
+        await store.setSetting('reader', JSON.stringify(nextPrefs));
+      }
       setBookmarks((current) => {
         const next = forgetBookmarks(current, id);
         void store.setSetting('bookmarks', JSON.stringify(next));
@@ -172,6 +186,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       const bytes = await readNamed(id, 'book.bin');
       if (!bytes) throw new Error('这本书的文件不见了。可以删掉记录后重新导入。');
       await store.touch(id);
+      const openedAt = Date.now();
+      setBooks((current) => current.map((book) => (book.id === id ? { ...book, lastOpenedAt: openedAt } : book)));
       return inspectBook(record.fileName, bytes);
     },
     [store],
@@ -186,6 +202,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
           book.id === id ? { ...book, chapterIndex, pageIndex, progress, lastOpenedAt: Date.now() } : book,
         ),
       );
+    },
+    [store],
+  );
+
+  const markBook = useCallback(
+    async (id: string, mark: ReadingMark) => {
+      if (!store) return;
+      const next = normalizeReadingMark(mark);
+      await store.updateReadingMark(id, next);
+      setBooks((current) => current.map((book) => (book.id === id ? { ...book, readingMark: next } : book)));
     },
     [store],
   );
@@ -209,12 +235,36 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [books, refresh, store],
   );
 
-  const updateSettings = useCallback(
-    async (next: ReaderSettings) => {
-      setSettings(next);
+  const writePrefs = useCallback(
+    async (next: ReaderPrefs) => {
+      prefsRef.current = next;
+      setPrefs(next);
       await store?.setSetting('reader', JSON.stringify(next));
     },
     [store],
+  );
+
+  const updateSettings = useCallback(
+    async (next: ReaderSettings, bookId?: string) => {
+      const current = prefsRef.current;
+      const normalized = normalizeReaderSettings(next);
+      const updated = bookId
+        ? { ...current, books: { ...current.books, [bookId]: normalized } }
+        : { ...current, global: normalized };
+      await writePrefs(updated);
+    },
+    [writePrefs],
+  );
+
+  const clearBookSettings = useCallback(
+    async (bookId: string) => {
+      const current = prefsRef.current;
+      if (!current.books[bookId]) return;
+      const books = { ...current.books };
+      delete books[bookId];
+      await writePrefs({ ...current, books });
+    },
+    [writePrefs],
   );
 
   const updateDeviceName = useCallback(
@@ -247,7 +297,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       ready,
       error,
       books,
-      settings,
+      settings: prefs.global,
+      bookSettings: prefs.books,
       pin,
       deviceName,
       refresh,
@@ -259,8 +310,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       removeBook,
       loadBook,
       savePosition,
+      markBook,
       saveCover,
       updateSettings,
+      clearBookSettings,
       updateDeviceName,
       regeneratePin,
       bookmarks,
@@ -274,14 +327,17 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       importBytes,
       importShared,
       loadBook,
+      clearBookSettings,
+      markBook,
       pin,
+      prefs.books,
+      prefs.global,
       ready,
       refresh,
       regeneratePin,
       removeBook,
       saveCover,
       savePosition,
-      settings,
       toggleBookmarkFor,
       updateDeviceName,
       updateSettings,

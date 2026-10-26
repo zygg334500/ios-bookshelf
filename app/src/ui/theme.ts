@@ -1,3 +1,5 @@
+import type { ReaderTheme } from '../core/types';
+
 export const shelf = {
   bg: '#E6DDD0',
   bgDeep: '#D7CBBA',
@@ -14,6 +16,12 @@ export const fonts = {
   display: 'Georgia, "Iowan Old Style", Palatino, "Songti SC", "Times New Roman", serif',
   ui: '-apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
 };
+
+export function paperColors(theme: ReaderTheme): { paper: string; ink: string; track: string } {
+  if (theme === 'dark') return { paper: '#1c1a17', ink: '#ece4d6', track: '#3a342c' };
+  if (theme === 'light') return { paper: '#fbfbf8', ink: '#1c1c1c', track: '#ddd4c6' };
+  return { paper: '#f4ecd8', ink: '#3a2f24', track: '#e0d3bc' };
+}
 
 export function clothColor(id: string): string {
   let hash = 0;

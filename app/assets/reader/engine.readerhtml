@@ -8,45 +8,76 @@
   :root {
     --paper: #f4ecd8;
     --ink: #2a241c;
-    --font: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Heiti SC", "Songti SC", "Songti TC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    --font: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Heiti SC", "STHeiti", "Yuanti SC", "Songti SC", "Songti TC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
     --fs: 20px;
+    --lh: 1.75;
+    --align: justify;
+    --margin: 22px;
+    --safe-top: 0px;
+    --safe-right: 0px;
+    --safe-bottom: 0px;
+    --safe-left: 0px;
   }
   html, body { margin: 0; height: 100%; background: var(--paper, #f4ecd8); color: var(--ink, #2a241c); overflow: hidden; }
-  #stage { position: relative; height: 100%; perspective: 1800px; touch-action: none; user-select: none; -webkit-user-select: none; }
-  .sheet { position: absolute; inset: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
-  #leaf { transform-origin: left center; z-index: 2; box-shadow: 0 0 0 rgba(0,0,0,0); }
+  #stage { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .sheet {
+    position: absolute; inset: 0; background: var(--paper); color: var(--ink); overflow: hidden;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  #leaf { z-index: 2; will-change: transform; box-shadow: 0 0 18px rgba(40, 24, 10, 0.12); }
   #under { z-index: 1; }
-  #shade { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; }
-  .pad { position: absolute; inset: 28px 26px 36px; overflow: hidden; }
+  .edge { position: absolute; top: 0; bottom: 0; width: 28px; pointer-events: none; opacity: 0; }
+  .edge-left { left: 0; background: linear-gradient(90deg, rgba(40, 24, 10, 0.22), rgba(40, 24, 10, 0)); }
+  .edge-right { right: 0; background: linear-gradient(270deg, rgba(40, 24, 10, 0.22), rgba(40, 24, 10, 0)); }
+  .pad {
+    position: absolute;
+    top: calc(var(--safe-top) + 36px);
+    right: calc(var(--safe-right) + var(--margin));
+    bottom: calc(var(--safe-bottom) + 20px);
+    left: calc(var(--safe-left) + var(--margin));
+    overflow: hidden;
+  }
   .prose {
     font-size: var(--fs, 20px);
-    line-height: 1.75;
+    line-height: var(--lh, 1.75);
+    text-align: var(--align, justify);
+    text-justify: inter-character;
     font-family: var(--font);
     height: 100%;
     word-break: break-word;
     overflow-wrap: anywhere;
     -webkit-text-size-adjust: 100%;
-    -webkit-transform: translateZ(0);
     transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
   .prose, .prose * {
     font-family: var(--font) !important;
     color: var(--ink) !important;
     -webkit-text-fill-color: var(--ink) !important;
+    line-height: var(--lh, 1.75) !important;
+    text-align: var(--align, justify) !important;
     opacity: 1 !important;
     visibility: visible !important;
   }
   .vertical, .vertical * { writing-mode: vertical-rl !important; text-orientation: mixed !important; }
   .vertical .folio { writing-mode: horizontal-tb !important; }
   .prose p { margin: 0 0 0.85em; }
-  .prose h1, .prose h2, .prose h3 { font-weight: 600; line-height: 1.35; margin: 0 0 0.6em; }
+  .prose h1, .prose h2, .prose h3 { font-weight: 600; margin: 0 0 0.6em; }
   .prose img { max-width: 100%; max-height: 70%; object-fit: contain; }
-  .folio { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; letter-spacing: 0.12em; opacity: 0.55; font-family: "Iowan Old Style", Palatino, "Songti SC", serif; }
+  .folio {
+    position: absolute; left: 0; right: 0;
+    bottom: calc(var(--safe-bottom) + 2px);
+    text-align: center; font-size: 12px; letter-spacing: 0.12em; opacity: 0.55;
+    font-family: "Iowan Old Style", Palatino, "Songti SC", serif;
+  }
   #measure { position: absolute; left: 0; top: 0; overflow: hidden; visibility: hidden; pointer-events: none; z-index: -1; }
   #measure .probe { height: 100%; }
   .pdfwrap { height: 100%; display: flex; align-items: center; justify-content: center; }
   canvas { display: block; background: white; box-shadow: 0 8px 24px rgba(40, 24, 10, 0.12); }
-  #status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: "PingFang SC", "Songti SC", serif; letter-spacing: 0.08em; opacity: 0.7; }
+  #status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: "PingFang SC", "Heiti SC", "Songti SC", serif; letter-spacing: 0.08em; opacity: 0.7; }
   .empty { opacity: 0.7; }
 </style>
 <script>___BOOKSHELF_PDFJS___</script>
@@ -55,19 +86,20 @@
 <body>
 <div id="stage">
   <div id="under" class="sheet"><div class="pad"><div id="under-html" class="prose"></div><div id="under-pdf" class="pdfwrap" hidden><canvas id="under-canvas"></canvas></div></div><div class="folio" id="under-folio"></div></div>
-  <div id="leaf" class="sheet"><div class="pad"><div id="front-html" class="prose"></div><div id="front-pdf" class="pdfwrap" hidden><canvas id="front-canvas"></canvas></div></div><div class="folio" id="front-folio"></div></div>
-  <div id="shade"></div>
+  <div id="leaf" class="sheet"><div class="pad"><div id="front-html" class="prose"></div><div id="front-pdf" class="pdfwrap" hidden><canvas id="front-canvas"></canvas></div></div><div class="folio" id="front-folio"></div><div id="edge-left" class="edge edge-left"></div><div id="edge-right" class="edge edge-right"></div></div>
   <div id="status">正在打开…</div>
 </div>
 <div id="measure"></div>
 <script>
 (function () {
-  var CJK = '"PingFang SC", "PingFang TC", "Hiragino Sans GB", "Heiti SC", "Songti SC", "Songti TC", "STSong", "Noto Serif CJK SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
+  var CJK = '"PingFang SC", "PingFang TC", "Hiragino Sans GB", "Heiti SC", "STHeiti", "Yuanti SC", "Songti SC", "Songti TC", "STSong", "Noto Serif CJK SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
   var FONTS = {
     system: '-apple-system, BlinkMacSystemFont, ' + CJK,
-    pingfang: CJK,
+    pingfang: '"PingFang SC", "PingFang TC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", sans-serif',
     songti: '"Songti SC", "Songti TC", "STSong", "PMingLiU", "SimSun", "Source Han Serif SC", "Noto Serif CJK SC", "Noto Serif SC", serif',
-    kaiti: '"Kaiti SC", "Kaiti TC", "STKaiti", "KaiTi", "BiauKai", "Noto Serif CJK SC", serif'
+    heiti: '"Heiti SC", "Heiti TC", "STHeiti", "SimHei", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC", sans-serif',
+    kaiti: '"Kaiti SC", "Kaiti TC", "STKaiti", "KaiTi", "BiauKai", "Noto Serif CJK SC", serif',
+    yuanti: '"Yuanti SC", "Yuanti TC", "PingFang SC", "Hiragino Maru Gothic ProN", "Noto Sans CJK SC", sans-serif'
   };
   var THEMES = {
     light: { paper: '#fbfbf8', ink: '#1c1c1c', deep: '#eceae4' },
@@ -77,7 +109,8 @@
   var state = {
     kind: null,
     chapters: [],
-    settings: { fontId: 'system', fontSize: 20, theme: 'sepia', verticalTraditional: false, brightness: 1 },
+    settings: readSettings(null),
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
     chapter: 0,
     page: 0,
     cache: {},
@@ -90,7 +123,8 @@
   var stage = document.getElementById('stage');
   var leaf = document.getElementById('leaf');
   var under = document.getElementById('under');
-  var shade = document.getElementById('shade');
+  var edgeLeft = document.getElementById('edge-left');
+  var edgeRight = document.getElementById('edge-right');
   var statusEl = document.getElementById('status');
   var measure = document.getElementById('measure');
   var frontHtml = document.getElementById('front-html');
@@ -101,6 +135,7 @@
   var underCanvas = document.getElementById('under-canvas');
   var frontFolio = document.getElementById('front-folio');
   var underFolio = document.getElementById('under-folio');
+  var motion = 0;
 
   function post(message) {
     message.source = 'bookshelf';
@@ -112,18 +147,62 @@
     }
   }
 
+  function readSettings(raw) {
+    raw = raw || {};
+    var legacy = !!raw.verticalTraditional;
+    function num(value, min, max, fallback) {
+      var n = Number(value);
+      if (!isFinite(n)) return fallback;
+      return Math.min(max, Math.max(min, n));
+    }
+    var align = raw.align === 'left' || raw.align === 'center' || raw.align === 'justify' ? raw.align : 'justify';
+    return {
+      fontId: raw.fontId && FONTS[raw.fontId] ? raw.fontId : 'system',
+      fontSize: Math.round(num(raw.fontSize, 14, 36, 20)),
+      lineHeight: Math.round(num(raw.lineHeight, 1.35, 2.3, 1.75) * 100) / 100,
+      margin: Math.round(num(raw.margin, 8, 48, 22)),
+      align: align,
+      theme: raw.theme && THEMES[raw.theme] ? raw.theme : 'sepia',
+      vertical: typeof raw.vertical === 'boolean' ? raw.vertical : legacy,
+      traditional: typeof raw.traditional === 'boolean' ? raw.traditional : legacy,
+      brightness: num(raw.brightness, 0.55, 1, 1)
+    };
+  }
+
+  function setInsets(raw) {
+    raw = raw || {};
+    function edge(value) {
+      var n = Number(value);
+      return isFinite(n) && n > 0 ? n : 0;
+    }
+    state.insets = { top: edge(raw.top), right: edge(raw.right), bottom: edge(raw.bottom), left: edge(raw.left) };
+    var root = document.documentElement.style;
+    root.setProperty('--safe-top', state.insets.top + 'px');
+    root.setProperty('--safe-right', state.insets.right + 'px');
+    root.setProperty('--safe-bottom', state.insets.bottom + 'px');
+    root.setProperty('--safe-left', state.insets.left + 'px');
+  }
+
   function applyTheme() {
     var theme = THEMES[state.settings.theme] || THEMES.sepia;
     var font = FONTS[state.settings.fontId] || FONTS.system;
-    if (state.settings.verticalTraditional && state.settings.fontId === 'system') font = FONTS.songti;
-    document.documentElement.style.setProperty('--paper', theme.paper);
-    document.documentElement.style.setProperty('--ink', theme.ink);
-    document.documentElement.style.setProperty('--font', font);
-    document.documentElement.style.setProperty('--fs', state.settings.fontSize + 'px');
-    var vertical = !!(state.settings.verticalTraditional && state.kind !== 'pdf');
+    if (state.settings.vertical && state.settings.fontId === 'system') font = FONTS.songti;
+    var root = document.documentElement.style;
+    root.setProperty('--paper', theme.paper);
+    root.setProperty('--ink', theme.ink);
+    root.setProperty('--font', font);
+    root.setProperty('--fs', state.settings.fontSize + 'px');
+    root.setProperty('--lh', String(state.settings.lineHeight));
+    root.setProperty('--align', state.settings.align);
+    root.setProperty('--margin', state.settings.margin + 'px');
+    var vertical = isVertical();
     leaf.classList.toggle('vertical', vertical);
     under.classList.toggle('vertical', vertical);
     measure.classList.toggle('vertical', vertical);
+  }
+
+  function isVertical() {
+    return !!(state.settings.vertical && state.kind !== 'pdf');
   }
 
   function contentBox() {
@@ -132,7 +211,7 @@
   }
 
   function overflows(el) {
-    if (state.settings.verticalTraditional && state.kind !== 'pdf') return el.scrollWidth > el.clientWidth + 2;
+    if (isVertical()) return el.scrollWidth > el.clientWidth + 2;
     return el.scrollHeight > el.clientHeight + 2;
   }
 
@@ -162,7 +241,7 @@
     if (box.w < 48 || box.h < 48) return [html];
     measure.style.width = box.w + 'px';
     measure.style.height = box.h + 'px';
-    measure.className = 'prose' + (state.settings.verticalTraditional ? ' vertical' : '');
+    measure.className = 'prose' + (state.settings.vertical ? ' vertical' : '');
     var sandbox = document.createElement('div');
     sandbox.innerHTML = html || '<p class="empty">这一章没有正文。</p>';
     var nodes = Array.prototype.slice.call(sandbox.childNodes);
@@ -172,7 +251,7 @@
     measure.innerHTML = '';
     measure.appendChild(page);
 
-    function commit() {
+    function commitPage() {
       pages.push(page.innerHTML);
       page = document.createElement('div');
       page.className = 'probe';
@@ -230,13 +309,13 @@
       page.appendChild(node);
       if (!overflows(measure)) return;
       page.removeChild(node);
-      if (page.childNodes.length) commit();
+      if (page.childNodes.length) commitPage();
       var pieces = splitNode(node);
       pieces.forEach(function (piece) {
         page.appendChild(piece);
         if (overflows(measure)) {
           page.removeChild(piece);
-          if (page.childNodes.length) commit();
+          if (page.childNodes.length) commitPage();
           page.appendChild(piece);
         }
       });
@@ -248,8 +327,14 @@
     return pages.length ? pages : ['<p class="empty">这一章没有正文。</p>'];
   }
 
+  function layoutStamp() {
+    var box = contentBox();
+    var s = state.settings;
+    return [s.fontId, s.fontSize, s.lineHeight, s.margin, s.align, s.vertical ? 'v' : 'h', box.w, box.h].join(':');
+  }
+
   function pagesFor(chapter) {
-    var key = chapter + ':' + state.settings.fontId + ':' + state.settings.fontSize + ':' + (state.settings.verticalTraditional ? 'v' : 'h') + ':' + stage.clientWidth + 'x' + stage.clientHeight;
+    var key = chapter + ':' + layoutStamp();
     if (state.cache[key]) return state.cache[key];
     var chapterData = state.chapters[chapter];
     var html = chapterData ? ((chapterData.styles ? '<style>' + chapterData.styles + '</style>' : '') + chapterData.html) : '';
@@ -258,13 +343,20 @@
     return pages;
   }
 
+  function bookProgress(chapter, page, pageCount, chapterCount) {
+    if (chapterCount <= 0) return 0;
+    var pages = Math.max(pageCount, 1);
+    var chapterIndex = Math.max(0, Math.min(chapter, chapterCount - 1));
+    var pageIndex = Math.max(0, Math.min(page, pages - 1));
+    var last = chapterIndex >= chapterCount - 1 && pageIndex >= pages - 1;
+    if (last && (chapterCount > 1 || pages > 1)) return 1;
+    if (chapterIndex === 0 && pageIndex === 0) return 0;
+    return Math.max(0, Math.min(1, (chapterIndex + pageIndex / pages) / chapterCount));
+  }
+
   function report() {
     var pageCount = state.kind === 'pdf' && state.pdf ? state.pdf.numPages : (state.kind === 'html' ? pagesFor(state.chapter).length : 1);
     var chapterCount = state.kind === 'pdf' ? 1 : Math.max(state.chapters.length, 1);
-    var within = pageCount ? state.page / pageCount : 0;
-    var progress = state.kind === 'pdf'
-      ? (pageCount ? (state.page + 0.5) / pageCount : 0)
-      : (state.chapter + within) / chapterCount;
     var title = state.kind === 'pdf' ? '' : ((state.chapters[state.chapter] && state.chapters[state.chapter].title) || '');
     post({
       type: 'progress',
@@ -272,14 +364,15 @@
       pageIndex: state.page,
       pageCount: pageCount,
       chapterCount: chapterCount,
-      progress: Math.max(0, Math.min(1, progress)),
+      progress: bookProgress(state.chapter, state.page, pageCount, chapterCount),
       chapterTitle: title
     });
   }
 
   function setHtml(target, folio, html, pageNumber, pageCount) {
     target.hidden = false;
-    target.parentElement.querySelector('.pdfwrap') && (target.parentElement.querySelector('.pdfwrap').hidden = true);
+    var wrap = target.parentElement.querySelector('.pdfwrap');
+    if (wrap) wrap.hidden = true;
     target.innerHTML = html;
     folio.textContent = pageCount > 1 ? String(pageNumber + 1) : '';
   }
@@ -333,47 +426,117 @@
     return { chapter: chapter, page: dir > 0 ? 0 : Math.max(0, other.length - 1) };
   }
 
-  function paintDestination(dest) {
+  function paintUnder(dest) {
     if (!dest) return;
     if (state.kind === 'pdf') {
+      underPdf.hidden = false;
+      underHtml.hidden = true;
       renderPdf(dest.page + 1, underCanvas);
       underFolio.textContent = String(dest.page + 1);
       return;
     }
-    showHtml(state.chapter, state.page, dest);
+    var pages = pagesFor(dest.chapter);
+    var index = Math.max(0, Math.min(pages.length - 1, dest.page));
+    underHtml.hidden = false;
+    underPdf.hidden = true;
+    setHtml(underHtml, underFolio, pages[index] || '', index, pages.length);
+  }
+
+  function setLeafX(x) {
+    var value = 'translate3d(' + (Math.round(x * 10) / 10) + 'px,0,0)';
+    leaf.style.transform = value;
+    leaf.style.webkitTransform = value;
+  }
+
+  function paintEdge(amount, dir) {
+    var value = amount <= 0.01 ? '0' : String(Math.max(0, Math.min(0.9, amount)));
+    edgeRight.style.opacity = dir > 0 ? value : '0';
+    edgeLeft.style.opacity = dir > 0 ? '0' : value;
   }
 
   function restLeaf() {
-    leaf.style.transition = 'none';
-    leaf.style.transform = 'none';
-    leaf.style.webkitTransform = 'none';
+    motion += 1;
+    setLeafX(0);
+    paintEdge(0, 1);
     leaf.style.transformStyle = 'flat';
     leaf.style.webkitTransformStyle = 'flat';
-    shade.style.opacity = '0';
-  }
-
-  function armCurl() {
-    leaf.style.transformStyle = 'preserve-3d';
-    leaf.style.webkitTransformStyle = 'preserve-3d';
   }
 
   function commit(dest) {
-    restLeaf();
+    motion += 1;
     if (!dest) {
+      restLeaf();
       if (state.kind === 'pdf') renderPdf(state.page + 1, frontCanvas);
       else showHtml(state.chapter, state.page, null);
       return;
     }
     if (state.kind === 'pdf') {
       state.page = dest.page;
-      renderPdf(state.page + 1, frontCanvas);
+      if (underCanvas.width > 0 && underCanvas.height > 0) {
+        frontCanvas.width = underCanvas.width;
+        frontCanvas.height = underCanvas.height;
+        var ctx = frontCanvas.getContext('2d');
+        if (ctx) ctx.drawImage(underCanvas, 0, 0);
+      } else {
+        renderPdf(state.page + 1, frontCanvas);
+      }
+      frontFolio.textContent = String(state.page + 1);
+      frontHtml.hidden = true;
+      underHtml.hidden = true;
+      frontPdf.hidden = false;
+      underPdf.hidden = false;
+      setLeafX(0);
+      paintEdge(0, 1);
+      leaf.style.transformStyle = 'flat';
+      leaf.style.webkitTransformStyle = 'flat';
       var nxt = neighbor(1);
       if (nxt) renderPdf(nxt.page + 1, underCanvas);
-      frontFolio.textContent = String(state.page + 1);
       report();
       return;
     }
-    showHtml(dest.chapter, dest.page, neighbor(1));
+    var landed = pagesFor(dest.chapter);
+    var landedIndex = Math.max(0, Math.min(landed.length - 1, dest.page));
+    state.chapter = dest.chapter;
+    state.page = landedIndex;
+    frontPdf.hidden = true;
+    underPdf.hidden = true;
+    frontHtml.hidden = false;
+    underHtml.hidden = false;
+    setHtml(frontHtml, frontFolio, landed[landedIndex], landedIndex, landed.length);
+    setLeafX(0);
+    paintEdge(0, 1);
+    leaf.style.transformStyle = 'flat';
+    leaf.style.webkitTransformStyle = 'flat';
+    var follow = neighbor(1);
+    if (follow) paintUnder(follow);
+    statusEl.style.display = 'none';
+    report();
+  }
+
+  // Each frame writes translate3d only. A perspective fold repaints the WebView and drops frames.
+  function glideLeaf(from, to, dir, done) {
+    var token = ++motion;
+    var began = performance.now();
+    var duration = 260;
+    var finished = false;
+    function finish() {
+      if (finished || token !== motion) return;
+      finished = true;
+      setLeafX(to);
+      done();
+    }
+    function step(now) {
+      if (finished || token !== motion) return;
+      var t = Math.min(1, (now - began) / duration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      var x = from + (to - from) * eased;
+      setLeafX(x);
+      paintEdge(Math.abs(x) / Math.max(stage.clientWidth, 1), dir);
+      if (t < 1) requestAnimationFrame(step);
+      else finish();
+    }
+    requestAnimationFrame(step);
+    setTimeout(finish, duration + 50);
   }
 
   function renderPdf(pageNumber, canvas) {
@@ -449,7 +612,8 @@
   function loadBook(message) {
     state.cache = {};
     state.coverSent = false;
-    state.settings = message.settings || state.settings;
+    if (message.insets) setInsets(message.insets);
+    state.settings = readSettings(message.settings || state.settings);
     applyTheme();
     var position = message.position || { chapterIndex: 0, pageIndex: 0 };
     state.chapter = position.chapterIndex || 0;
@@ -482,6 +646,17 @@
     commit({ chapter: chapter, page: page });
   }
 
+  function reflow(fraction) {
+    state.cache = {};
+    applyTheme();
+    if (state.kind === 'html') {
+      var pages = pagesFor(state.chapter);
+      showHtml(state.chapter, Math.round(fraction * Math.max(pages.length - 1, 0)), neighbor(1));
+    } else if (state.kind === 'pdf') {
+      renderPdf(state.page + 1, frontCanvas);
+    }
+  }
+
   function onMessage(event) {
     var data = event.data;
     if (typeof data === 'string') {
@@ -496,16 +671,20 @@
         var current = pagesFor(state.chapter);
         fraction = current.length ? state.page / current.length : 0;
       }
-      state.settings = data.settings || state.settings;
-      state.cache = {};
+      var before = layoutStamp();
+      state.settings = readSettings(data.settings || state.settings);
       applyTheme();
+      if (layoutStamp() !== before) reflow(fraction);
+    }
+    if (data.type === 'insets') {
+      var insetFraction = 0;
       if (state.kind === 'html') {
-        var pages = pagesFor(state.chapter);
-        showHtml(state.chapter, Math.round(fraction * Math.max(pages.length - 1, 0)), neighbor(1));
-      } else if (state.kind === 'pdf') {
-        applyTheme();
-        renderPdf(state.page + 1, frontCanvas);
+        var insetPages = pagesFor(state.chapter);
+        insetFraction = insetPages.length ? state.page / insetPages.length : 0;
       }
+      var insetBefore = layoutStamp();
+      setInsets(data);
+      if (layoutStamp() !== insetBefore) reflow(insetFraction);
     }
     if (data.type === 'goto') {
       if (typeof data.progress === 'number') gotoProgress(data.progress);
@@ -527,78 +706,92 @@
   window.addEventListener('message', onMessage);
   document.addEventListener('message', onMessage);
 
+  function offsetFor(dir, distance) {
+    return dir > 0 ? -distance : distance;
+  }
+
+  function dirFromDx(dx) {
+    if (dx < -1) return 1;
+    if (dx > 1) return -1;
+    return 0;
+  }
+
   var drag = null;
   stage.addEventListener('pointerdown', function (event) {
     if (state.busy) return;
-    drag = { x: event.clientX, y: event.clientY, t: Date.now(), moved: false };
-    leaf.style.transition = 'none';
+    drag = {
+      x: event.clientX,
+      y: event.clientY,
+      t: performance.now(),
+      moved: false,
+      lx: event.clientX,
+      lt: performance.now(),
+      vx: 0,
+      offset: 0,
+      dir: 0,
+      painted: false
+    };
   });
   window.addEventListener('pointermove', function (event) {
     if (!drag || state.busy) return;
     var dx = event.clientX - drag.x;
     var dy = event.clientY - drag.y;
-    if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+    if (!drag.moved && (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy))) return;
     drag.moved = true;
-    var dir = dx < 0 ? 1 : -1;
+    var dir = dirFromDx(dx) || drag.dir || 1;
+    drag.dir = dir;
     var dest = neighbor(dir);
-    if (!dest) {
-      restLeaf();
-      return;
-    }
-    armCurl();
-    if (!drag.painted || drag.dir !== dir) {
-      drag.dir = dir;
-      drag.painted = true;
-      paintDestination(dest);
-    }
     var width = Math.max(stage.clientWidth, 1);
-    var progress = Math.max(0, Math.min(1, Math.abs(dx) / width));
-    var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
-    var angle = vertical ? dir * progress * 62 : dir * progress * -62;
-    leaf.style.transformOrigin = vertical ? 'right center' : 'left center';
-    leaf.style.transform = 'perspective(1500px) rotateY(' + angle + 'deg)';
-    leaf.style.boxShadow = '0 12px 30px rgba(40, 24, 10, ' + (0.05 + progress * 0.18) + ')';
-    shade.style.opacity = String(progress * 0.45);
-    shade.style.background = dir > 0
-      ? 'linear-gradient(90deg, rgba(40,24,10,0.28), transparent 46%)'
-      : 'linear-gradient(270deg, rgba(40,24,10,0.28), transparent 46%)';
+    var x = dest ? Math.max(-width, Math.min(width, dx)) : dx * 0.2;
+    if (dest && (!drag.painted || drag.paintedDir !== dir)) {
+      drag.painted = true;
+      drag.paintedDir = dir;
+      paintUnder(dest);
+    }
+    drag.offset = x;
+    setLeafX(x);
+    paintEdge(Math.min(1, Math.abs(x) / width), dir);
+    var now = performance.now();
+    var dt = Math.max(1, now - drag.lt);
+    drag.vx = (event.clientX - drag.lx) / dt;
+    drag.lx = event.clientX;
+    drag.lt = now;
   });
   function endDrag(event) {
     if (!drag) return;
     var dx = event.clientX - drag.x;
-    var dt = Math.max(1, Date.now() - drag.t);
-    var flick = dx / dt;
     var width = Math.max(stage.clientWidth, 1);
     var start = drag;
     drag = null;
     if (!start.moved) {
       var x = start.x / width;
-      if (x < 0.22) turn(-1);
-      else if (x > 0.78) turn(1);
+      var vertical = isVertical();
+      if (vertical ? x < 0.22 : x > 0.78) turn(1);
+      else if (vertical ? x > 0.78 : x < 0.22) turn(-1);
       else {
         post({ type: 'chrome' });
         restLeaf();
       }
       return;
     }
-    var dir = dx < 0 ? 1 : -1;
+    var dir = dirFromDx(dx) || start.dir || 1;
     var dest = neighbor(dir);
-    var should = dest && (Math.abs(dx) > width * 0.22 || Math.abs(flick) > 0.65);
-    leaf.style.transition = 'transform 420ms cubic-bezier(.2,.7,.2,1), box-shadow 420ms ease';
+    var flick = start.vx || 0;
+    var should = !!(dest && (Math.abs(dx) > width * 0.18 || Math.abs(flick) > 0.55));
+    var from = start.offset || 0;
     if (!should) {
-      restLeaf();
+      state.busy = true;
+      glideLeaf(from, 0, dir, function () {
+        state.busy = false;
+        restLeaf();
+      });
       return;
     }
-    armCurl();
     state.busy = true;
-    var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
-    var angle = vertical ? dir * 62 : dir * -62;
-    leaf.style.transform = 'perspective(1500px) rotateY(' + angle + 'deg)';
-    shade.style.opacity = '0.45';
-    setTimeout(function () {
+    glideLeaf(from, offsetFor(dir, width), dir, function () {
       state.busy = false;
       commit(dest);
-    }, 430);
+    });
   }
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
@@ -606,25 +799,21 @@
   function turn(dir) {
     var dest = neighbor(dir);
     if (!dest || state.busy) return;
-    paintDestination(dest);
-    armCurl();
+    paintUnder(dest);
     state.busy = true;
-    var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
-    leaf.style.transition = 'transform 460ms cubic-bezier(.2,.7,.2,1)';
-    leaf.style.transformOrigin = vertical ? 'right center' : 'left center';
-    leaf.style.transform = 'perspective(1500px) rotateY(' + (vertical ? dir * 62 : dir * -62) + 'deg)';
-    shade.style.opacity = '0.4';
-    setTimeout(function () {
+    var width = Math.max(stage.clientWidth, 1);
+    glideLeaf(0, offsetFor(dir, width), dir, function () {
       state.busy = false;
       commit(dest);
-    }, 470);
+    });
   }
 
   window.addEventListener('keydown', function (event) {
-    if (event.key === 'ArrowRight' || event.key === 'PageDown') turn(state.settings.verticalTraditional && state.kind !== 'pdf' ? -1 : 1);
-    if (event.key === 'ArrowLeft' || event.key === 'PageUp') turn(state.settings.verticalTraditional && state.kind !== 'pdf' ? 1 : -1);
+    if (event.key === 'ArrowRight' || event.key === 'PageDown') turn(isVertical() ? -1 : 1);
+    if (event.key === 'ArrowLeft' || event.key === 'PageUp') turn(isVertical() ? 1 : -1);
   });
   window.addEventListener('resize', function () {
+    restLeaf();
     if (state.kind === 'html') {
       state.cache = {};
       showHtml(state.chapter, state.page, neighbor(1));

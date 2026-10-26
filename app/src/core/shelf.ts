@@ -1,3 +1,5 @@
+import type { ReadingMark } from './types';
+
 export type ImportAttempt = {
   name: string;
   ok: boolean;
@@ -30,6 +32,13 @@ export function shelfCountLabel(count: number): string {
 
 export type ShelfSort = 'recent' | 'title' | 'author' | 'progress' | 'opened';
 
+export type { ReadingMark };
+export type ReadingStatus = 'unread' | 'reading' | 'finished';
+export type ShelfFilter = 'all' | ReadingStatus;
+
+/** Last-page progress is 1. Anything this close still counts as finished. */
+export const FINISHED_PROGRESS = 0.98;
+
 export type ShelfEntry = {
   title: string;
   author: string;
@@ -37,14 +46,52 @@ export type ShelfEntry = {
   addedAt: number;
   progress: number;
   lastOpenedAt: number | null;
+  readingMark?: ReadingMark;
 };
 
-export function filterAndSortBooks<T extends ShelfEntry>(books: T[], query: string, sort: ShelfSort): T[] {
+export function normalizeReadingMark(value: unknown): ReadingMark {
+  if (value === 'reading' || value === 'finished') return value;
+  return 'auto';
+}
+
+/** 未读 until the book is opened. 已完成 at the end, or when the reader marks it. 标为在读 sticks. */
+export function readingStatus(book: Pick<ShelfEntry, 'progress' | 'lastOpenedAt' | 'readingMark'>): ReadingStatus {
+  const mark = normalizeReadingMark(book.readingMark);
+  if (mark === 'finished') return 'finished';
+  if (mark === 'reading') return 'reading';
+  if (book.progress >= FINISHED_PROGRESS) return 'finished';
+  if (book.progress <= 0.005 && !(book.lastOpenedAt && book.lastOpenedAt > 0)) return 'unread';
+  return 'reading';
+}
+
+export function readingStatusLabel(status: ReadingStatus): string {
+  if (status === 'finished') return '已完成';
+  if (status === 'reading') return '阅读中';
+  return '未读';
+}
+
+export function statusCounts<T extends ShelfEntry>(books: T[]): Record<ReadingStatus, number> {
+  const counts: Record<ReadingStatus, number> = { unread: 0, reading: 0, finished: 0 };
+  for (const book of books) counts[readingStatus(book)] += 1;
+  return counts;
+}
+
+export function statusSummary(counts: Record<ReadingStatus, number>): string {
+  return `未读 ${counts.unread} · 阅读中 ${counts.reading} · 已完成 ${counts.finished}`;
+}
+
+export function filterAndSortBooks<T extends ShelfEntry>(
+  books: T[],
+  query: string,
+  sort: ShelfSort,
+  status: ShelfFilter = 'all',
+): T[] {
   const needle = query.trim().toLocaleLowerCase();
   const matched = needle
     ? books.filter((book) => `${book.title}\n${book.author}\n${book.fileName}`.toLocaleLowerCase().includes(needle))
     : books.slice();
-  const copy = needle ? matched.slice() : matched;
+  const filtered = status === 'all' ? matched : matched.filter((book) => readingStatus(book) === status);
+  const copy = filtered.slice();
   copy.sort((a, b) => {
     if (sort === 'title') return a.title.localeCompare(b.title, 'zh') || b.addedAt - a.addedAt;
     if (sort === 'author') return a.author.localeCompare(b.author, 'zh') || a.title.localeCompare(b.title, 'zh');

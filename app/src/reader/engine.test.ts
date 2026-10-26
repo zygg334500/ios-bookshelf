@@ -12,7 +12,16 @@ describe('reader engine', () => {
     expect(html).toContain('font-family: var(--font) !important');
     expect(html).toContain('color: var(--ink) !important');
     expect(html).toContain('-webkit-text-fill-color: var(--ink) !important');
+    expect(html).toContain('Heiti SC');
+    expect(html).toContain('Yuanti SC');
     expect(html).toContain('writing-mode: vertical-rl');
+    expect(html).toContain('verticalTraditional');
+    expect(html).toContain('--safe-top');
+    expect(html).toContain('--lh');
+    expect(html).toContain('text-align: var(--align, justify)');
+    expect(html).toContain('translate3d');
+    expect(html).toContain('requestAnimationFrame');
+    expect(html).not.toContain('rotateY');
     expect(html).not.toMatch(/transform-style:\s*preserve-3d/);
     expect(html).toContain("transformStyle = 'flat'");
   });

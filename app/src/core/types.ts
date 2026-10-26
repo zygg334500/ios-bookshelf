@@ -24,6 +24,8 @@ export type LoadedBook = {
   pdfBytes?: Uint8Array;
 };
 
+export type ReadingMark = 'auto' | 'reading' | 'finished';
+
 export type BookRecord = {
   id: string;
   title: string;
@@ -36,24 +38,38 @@ export type BookRecord = {
   pageIndex: number;
   progress: number;
   coverName: string | null;
+  /** auto follows progress; reading / finished are explicit. */
+  readingMark: ReadingMark;
 };
 
-export type ReaderFontId = 'system' | 'pingfang' | 'songti' | 'kaiti';
+export type ReaderFontId = 'system' | 'pingfang' | 'songti' | 'heiti' | 'kaiti' | 'yuanti';
 export type ReaderTheme = 'light' | 'sepia' | 'dark';
+export type ReaderAlign = 'left' | 'justify' | 'center';
 
 export type ReaderSettings = {
   fontId: ReaderFontId;
   fontSize: number;
+  lineHeight: number;
+  /** Extra horizontal padding inside the safe area, in px. */
+  margin: number;
+  align: ReaderAlign;
   theme: ReaderTheme;
-  verticalTraditional: boolean;
+  /** 竖排. Independent of simplified-to-traditional conversion. */
+  vertical: boolean;
+  /** 简转繁. Independent of vertical layout. */
+  traditional: boolean;
   brightness: number;
 };
 
 export const defaultReaderSettings: ReaderSettings = {
   fontId: 'system',
   fontSize: 20,
+  lineHeight: 1.75,
+  margin: 22,
+  align: 'justify',
   theme: 'sepia',
-  verticalTraditional: false,
+  vertical: false,
+  traditional: false,
   brightness: 1,
 };
 
