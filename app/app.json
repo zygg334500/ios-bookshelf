@@ -1,0 +1,86 @@
+{
+  "expo": {
+    "name": "BookShelf",
+    "slug": "bookshelf",
+    "scheme": "bookshelf",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fengyang.bookshelf",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "BookShelf 只在你的局域网里接收 Windows 传来的书籍。请允许本地网络，否则无法 Wi-Fi 传书。",
+        "NSBonjourServices": ["_bookshelf._tcp"],
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "PDF",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["com.adobe.pdf"]
+          },
+          {
+            "CFBundleTypeName": "EPUB",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["org.idpf.epub-container"]
+          },
+          {
+            "CFBundleTypeName": "AZW3",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["com.fengyang.azw3"]
+          }
+        ],
+        "UTImportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "org.idpf.epub-container",
+            "UTTypeDescription": "EPUB book",
+            "UTTypeConformsTo": ["public.data", "public.composite-content"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["epub"],
+              "public.mime-type": ["application/epub+zip"]
+            }
+          },
+          {
+            "UTTypeIdentifier": "com.fengyang.azw3",
+            "UTTypeDescription": "DRM-free AZW3 book",
+            "UTTypeConformsTo": ["public.data"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["azw3", "kf8"],
+              "public.mime-type": ["application/vnd.amazon.mobi8-ebook", "application/x-mobi8-ebook"]
+            }
+          }
+        ]
+      }
+    },
+    "android": {
+      "package": "com.fengyang.bookshelf",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6DDD0",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-asset",
+      "expo-sqlite",
+      [
+        "expo-file-system",
+        {
+          "supportsOpeningDocumentsInPlace": true,
+          "enableFileSharing": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

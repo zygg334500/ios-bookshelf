@@ -1,0 +1,10 @@
+BookShelf bundles two Apache-2.0 projects:
+
+- PDF.js 3.11.174 (Mozilla), used to draw PDF pages inside the reader WebView.
+  https://github.com/mozilla/pdf.js
+- OpenCC simplified-to-traditional character and phrase tables, used only as a display
+  conversion when 竖排繁体 is on. The original book file is not rewritten.
+  https://github.com/BYVoid/OpenCC
+
+PalmDOC decompression follows the published MobileRead compression notes.
+It is packaging, not a DRM removal step. Encrypted AZW3 files are refused.

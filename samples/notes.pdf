@@ -1,0 +1,88 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 4 /Kids [8 0 R 9 0 R 10 0 R 11 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+4 0 obj
+<< /Length 161 >>
+stream
+BT /F1 18 Tf 72 740 Td 16 TL
+(Notes from a paper shelf) Tj
+T*
+(An original fixture, not a published book.) Tj
+T*
+(Page one. The Chinese samples are EPUBs.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Length 164 >>
+stream
+BT /F1 18 Tf 72 740 Td 16 TL
+(The reader keeps this page as a fixed PDF.) Tj
+T*
+(Curl is a perspective fold, not a reflow.) Tj
+T*
+(Standard Times-Roman only.) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Length 165 >>
+stream
+BT /F1 18 Tf 72 740 Td 16 TL
+(Turn again. Progress should move.) Tj
+T*
+(Close the book and it remembers the page.) Tj
+T*
+(No network is required after import.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Length 138 >>
+stream
+BT /F1 18 Tf 72 740 Td 16 TL
+(Last page.) Tj
+T*
+(If you can read this, PDF.js rendered the fixture.) Tj
+T*
+(End of the paper notes.) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000135 00000 n 
+0000000207 00000 n 
+0000000419 00000 n 
+0000000634 00000 n 
+0000000850 00000 n 
+0000001039 00000 n 
+0000001165 00000 n 
+0000001291 00000 n 
+0000001418 00000 n 
+trailer<< /Size 12 /Root 1 0 R >>
+startxref
+1545
+%%EOF

@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+*.ipa
+*.xcarchive
+received/
+.venv/
