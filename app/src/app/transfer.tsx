@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../storage/library';
-import { getTransferSnapshot, subscribeTransfer, type TransferSnapshot } from '../transfer/server';
+import { getTransferSnapshot, restartTransfer, subscribeTransfer, type TransferSnapshot } from '../transfer/server';
 import { QrCode } from '../ui/QrCode';
 import { fonts, shelf } from '../ui/theme';
 
@@ -31,7 +31,7 @@ export default function TransferScreen() {
       <Text style={styles.kicker}>LOCAL NETWORK</Text>
       <Text style={styles.title}>Wi-Fi 传书</Text>
       <Text style={styles.sub}>
-        手机和 Windows 电脑连同一个家里的 Wi-Fi。不要用访客网络，先关掉 VPN。传书时让 BookShelf 留在前台。
+        搜索失败时不必重装。下面的 IP、端口和配对码就是手动通道，BookPush 搜到 0 台时直接填这三项。
       </Text>
 
       <View style={styles.card}>
@@ -51,23 +51,34 @@ export default function TransferScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>状态</Text>
+        <Text style={styles.label}>手工填写</Text>
+        <Text style={styles.fieldLabel}>IP</Text>
+        <Text selectable style={styles.address}>{status.ip ?? '装进 iPhone 并连上 Wi-Fi 后出现'}</Text>
+        <Text style={styles.fieldLabel}>端口</Text>
+        <Text selectable style={styles.port}>{status.port ?? '27780'}</Text>
+        <Text style={styles.hint}>配对码在上面。它不写入 Bonjour，只在 BookPush 里再输入一次。</Text>
+        {address ? (
+          <View style={styles.qr}>
+            <QrCode value={address} />
+          </View>
+        ) : null}
         <Text style={styles.body}>{status.detail}</Text>
         {status.error ? <Text style={styles.error}>{status.error}</Text> : null}
-        {address ? (
-          <>
-            <Text style={styles.address}>{address}</Text>
-            <Text style={styles.hint}>
-              {status.bonjour ? '已用 Bonjour 广播 _bookshelf._tcp。' : '没有广播成功时，把上面的地址填进 BookPush。'}
-            </Text>
-            <View style={styles.qr}>
-              <QrCode value={address} />
-            </View>
-          </>
-        ) : (
-          <Text style={styles.hint}>装进 iPhone 并允许「本地网络」之后，这里会出现 IP 和二维码。</Text>
-        )}
+        <Text style={styles.hint}>
+          {status.bonjour ? '已广播 _bookshelf._tcp。' : '还没有广播成功时，Windows 搜索会是 0 台，用上面的 IP 和端口即可。'}
+        </Text>
+        <Pressable style={styles.button} onPress={() => void restartTransfer()}>
+          <Text style={styles.buttonText}>重新监听</Text>
+        </Pressable>
         {status.lastTitle ? <Text style={styles.body}>最近收到《{status.lastTitle}》</Text> : null}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>搜不到手机时</Text>
+        <Text style={styles.body}>1. 第一次会弹出「本地网络」。若之前点了不允许：设置 → 隐私与安全性 → 本地网络 → 打开 BookShelf。</Text>
+        <Text style={styles.body}>2. 手机和电脑连同一个家里的 Wi-Fi，不要用访客网络，两边关掉 VPN。这一页留在前台。</Text>
+        <Text style={styles.body}>3. Windows 防火墙允许 Python 在专用网络收发 UDP 5353。BookPush 点「重新搜索」。</Text>
+        <Text style={styles.body}>4. 仍然是 0 台：把 IP、端口、配对码填进 BookPush，再传书。</Text>
       </View>
 
       <View style={styles.card}>
@@ -113,7 +124,9 @@ const styles = StyleSheet.create({
   hint: { fontFamily: fonts.ui, color: shelf.muted, lineHeight: 20 },
   body: { fontFamily: fonts.ui, color: shelf.ink, lineHeight: 22 },
   error: { fontFamily: fonts.ui, color: shelf.accent, lineHeight: 22 },
-  address: { fontFamily: fonts.ui, fontSize: 18, color: shelf.ink, marginTop: 8 },
+  fieldLabel: { fontFamily: fonts.ui, color: shelf.muted, fontSize: 12, marginTop: 8 },
+  address: { fontFamily: fonts.ui, fontSize: 28, color: shelf.ink },
+  port: { fontFamily: fonts.display, fontSize: 36, letterSpacing: 2, color: shelf.ink },
   link: { fontFamily: fonts.ui, color: shelf.accent, marginTop: 4 },
   qr: { alignItems: 'flex-start', marginTop: 8 },
   button: {

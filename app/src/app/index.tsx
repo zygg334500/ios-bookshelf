@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
+import { filterAndSortBooks, shelfCountLabel, summarizeImports, type ImportAttempt, type ShelfSort } from '../core/shelf';
 import { useLibrary, type ShelfBook } from '../storage/library';
 import { readAssetBytes } from '../reader/assets';
 import { bundledSamples } from '../ui/samples';
@@ -25,6 +26,17 @@ export default function LibraryScreen() {
   const library = useLibrary();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ShelfSort>('recent');
+  const visibleBooks = filterAndSortBooks(library.books, query, sort);
+  const sortChoices: { id: ShelfSort; label: string }[] = [
+    { id: 'recent', label: '最近加入' },
+    { id: 'title', label: '书名' },
+    { id: 'author', label: '作者' },
+    { id: 'progress', label: '进度' },
+    { id: 'opened', label: '最近读过' },
+  ];
   const columns = width >= 1100 ? 6 : width >= 840 ? 5 : width >= 640 ? 4 : 3;
   const gap = 16;
   const itemWidth = Math.floor((Math.min(width, 1200) - 36 - gap * (columns - 1)) / columns);
@@ -38,14 +50,22 @@ export default function LibraryScreen() {
     });
     if (result.canceled) return;
     setBusy(true);
+    const attempts: ImportAttempt[] = [];
     try {
       for (const asset of result.assets) {
-        const bytes = await readPicked(asset);
-        await library.importBytes(asset.name, bytes);
+        try {
+          const bytes = await readPicked(asset);
+          const imported = await library.importBytes(asset.name, bytes);
+          attempts.push({ name: asset.name, ok: true, format: imported.format });
+        } catch (error) {
+          attempts.push({
+            name: asset.name,
+            ok: false,
+            error: error instanceof Error ? error.message : '导入失败。',
+          });
+        }
       }
-      setMessage(`已放入 ${result.assets.length} 本。`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '导入失败。');
+      setMessage(summarizeImports(attempts));
     } finally {
       setBusy(false);
     }
@@ -54,24 +74,41 @@ export default function LibraryScreen() {
   const importSamples = async () => {
     setBusy(true);
     setMessage(null);
+    const attempts: ImportAttempt[] = [];
     try {
       for (const sample of bundledSamples) {
-        const bytes = await readAssetBytes(sample.moduleId);
-        await library.importBytes(sample.name, bytes);
+        try {
+          const bytes = await readAssetBytes(sample.moduleId);
+          const imported = await library.importBytes(sample.name, bytes);
+          attempts.push({ name: sample.label, ok: true, format: imported.format });
+        } catch (error) {
+          attempts.push({
+            name: sample.label,
+            ok: false,
+            error: error instanceof Error ? error.message : '示例导入失败。',
+          });
+        }
       }
-      setMessage('四本示例已经放上书架。它们都是仓库里的原创短篇，没有版权书。');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '示例导入失败。');
+      const summary = summarizeImports(attempts);
+      setMessage(
+        attempts.every((item) => item.ok)
+          ? `四本示例已经放上书架，包含一本无 DRM 的 AZW3。它们都是仓库里的原创短篇，没有版权书。${summary}`
+          : summary,
+      );
     } finally {
       setBusy(false);
     }
   };
 
-  const confirmDelete = (book: ShelfBook) => {
-    Alert.alert('从书架拿走', `删除《${book.title}》？文件会从这台设备上移除。`, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: () => void library.removeBook(book.id) },
-    ]);
+  const askRemove = (book: ShelfBook) => {
+    if (pendingDelete === book.id) {
+      setPendingDelete(null);
+      void library.removeBook(book.id);
+      setMessage(`已从书架拿走《${book.title}》。`);
+      return;
+    }
+    setPendingDelete(book.id);
+    setMessage(`再点一次「移出」，确认拿走《${book.title}》。文件会从这台设备上删除。`);
   };
 
   return (
@@ -87,6 +124,13 @@ export default function LibraryScreen() {
           <Text style={styles.kicker}>BOOKSHELF</Text>
           <Text style={styles.title}>书架</Text>
           <Text style={styles.sub}>离线阅读。PDF、EPUB，以及没有 DRM 的 AZW3。</Text>
+          <Text style={styles.sub}>
+            {library.ready
+              ? query.trim()
+                ? `架上 ${library.books.length} 本，符合 ${visibleBooks.length} 本。`
+                : shelfCountLabel(library.books.length)
+              : '正在打开书架…'}
+          </Text>
         </View>
       </View>
       <View style={styles.actions}>
@@ -109,6 +153,26 @@ export default function LibraryScreen() {
           <Text style={styles.emptyBody}>正在打开书架…</Text>
         </View>
       ) : null}
+      {library.ready && library.books.length > 0 ? (
+        <View style={styles.searchBlock}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="搜索书名、作者或文件名"
+            placeholderTextColor={shelf.muted}
+            style={styles.search}
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+          <View style={styles.sortRow}>
+            {sortChoices.map((choice) => (
+              <Pressable key={choice.id} onPress={() => setSort(choice.id)} style={[styles.sortChip, sort === choice.id && styles.sortChipOn]}>
+                <Text style={[styles.sortText, sort === choice.id && styles.sortTextOn]}>{choice.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
       {library.ready && library.books.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>还没有书</Text>
@@ -116,28 +180,35 @@ export default function LibraryScreen() {
             可以从这台设备导入，也可以先放入内置示例，看看翻页、字体和竖排繁体。装到 iPhone 之后，用 Windows 的 BookPush 经家里的 Wi-Fi 把书送进来。
           </Text>
         </View>
+      ) : visibleBooks.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>没有符合的书</Text>
+          <Text style={styles.emptyBody}>换一个书名、作者或文件名再搜。架子上的书还在。</Text>
+        </View>
       ) : (
         <View style={[styles.grid, { gap }]}>
-          {library.books.map((book) => (
-            <Pressable
-              key={book.id}
-              style={{ width: itemWidth }}
-              onPress={() => router.push(`/read/${book.id}`)}
-              onLongPress={() => confirmDelete(book)}
-            >
-              <Cover book={book} width={itemWidth} />
-              <Text numberOfLines={2} style={styles.bookTitle}>
-                {book.title}
-              </Text>
-              <Text numberOfLines={1} style={styles.bookAuthor}>
-                {book.author}
-              </Text>
+          {visibleBooks.map((book) => (
+            <View key={book.id} style={{ width: itemWidth }}>
+              <Pressable onPress={() => router.push(`/read/${book.id}`)} onLongPress={() => askRemove(book)}>
+                <Cover book={book} width={itemWidth} />
+                <Text numberOfLines={2} style={styles.bookTitle}>
+                  {book.title}
+                </Text>
+                <Text numberOfLines={1} style={styles.bookAuthor}>
+                  {book.author}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => askRemove(book)} hitSlop={6}>
+                <Text style={[styles.remove, pendingDelete === book.id && styles.removeArmed]}>
+                  {pendingDelete === book.id ? '确认移出' : '移出'}
+                </Text>
+              </Pressable>
               {book.progress > 0.01 ? (
                 <View style={styles.track}>
                   <View style={[styles.fill, { width: `${Math.min(100, book.progress * 100)}%` }]} />
                 </View>
               ) : null}
-            </Pressable>
+            </View>
           ))}
         </View>
       )}
@@ -209,6 +280,21 @@ const styles = StyleSheet.create({
   },
   secondaryText: { color: shelf.ink, fontFamily: fonts.ui, fontSize: 15 },
   message: { color: shelf.ink, fontFamily: fonts.ui, marginBottom: 12, lineHeight: 22 },
+  searchBlock: { marginBottom: 14, gap: 8 },
+  search: {
+    backgroundColor: shelf.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: fonts.ui,
+    fontSize: 16,
+    color: shelf.ink,
+  },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sortChip: { borderWidth: 1, borderColor: shelf.line, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: shelf.card },
+  sortChipOn: { borderColor: shelf.accent, backgroundColor: 'rgba(142,47,42,0.12)' },
+  sortText: { fontFamily: fonts.ui, color: shelf.ink, fontSize: 13 },
+  sortTextOn: { color: shelf.accent },
   empty: {
     backgroundColor: shelf.card,
     borderRadius: 18,
@@ -221,6 +307,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   bookTitle: { marginTop: 8, color: shelf.ink, fontFamily: fonts.ui, fontSize: 14, lineHeight: 18 },
   bookAuthor: { color: shelf.muted, fontFamily: fonts.ui, fontSize: 12, marginTop: 2 },
+  remove: { color: shelf.accent, fontFamily: fonts.ui, fontSize: 12, marginTop: 4 },
+  removeArmed: { fontWeight: '700' },
   track: { height: 3, backgroundColor: shelf.line, borderRadius: 99, marginTop: 6, overflow: 'hidden' },
   fill: { height: 3, backgroundColor: shelf.accent },
   cover: {

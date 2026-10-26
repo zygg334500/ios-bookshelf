@@ -121,7 +121,7 @@ export async function scanSharedDocuments(): Promise<SharedFile[]> {
     if (!dir.exists) continue;
     for (const entry of dir.list()) {
       if (!(entry instanceof File)) continue;
-      if (!/\.(pdf|epub|azw3)$/i.test(entry.name)) continue;
+      if (!/\.(pdf|epub|azw3|azw|mobi|kf8|prc)$/i.test(entry.name)) continue;
       found.push({ name: entry.name, bytes: await entry.bytes() });
     }
   }

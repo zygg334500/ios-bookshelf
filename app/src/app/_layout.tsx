@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LibraryProvider, useLibrary } from '../storage/library';
-import { setTransferHooks, startTransfer, stopTransfer } from '../transfer/server';
+import { republishTransfer, setTransferHooks, startTransfer, stopTransfer } from '../transfer/server';
 import { shelf } from '../ui/theme';
 
 function TransferBridge() {
@@ -15,12 +15,18 @@ function TransferBridge() {
       getName: () => library.deviceName,
       importBook: (fileName, bytes) => library.importBytes(fileName, bytes),
     });
+  }, [library.deviceName, library.importBytes, library.pin, library.ready]);
+  useEffect(() => {
+    if (!library.ready) return;
     void startTransfer();
     return () => {
-      setTransferHooks(null);
       void stopTransfer();
     };
-  }, [library.deviceName, library.importBytes, library.pin, library.ready]);
+  }, [library.ready]);
+  useEffect(() => {
+    if (!library.ready) return;
+    void republishTransfer();
+  }, [library.deviceName, library.ready]);
   return null;
 }
 

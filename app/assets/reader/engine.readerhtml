@@ -5,22 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>BookShelf</title>
 <style>
+  :root {
+    --paper: #f4ecd8;
+    --ink: #2a241c;
+    --font: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Heiti SC", "Songti SC", "Songti TC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    --fs: 20px;
+  }
   html, body { margin: 0; height: 100%; background: var(--paper, #f4ecd8); color: var(--ink, #2a241c); overflow: hidden; }
   #stage { position: relative; height: 100%; perspective: 1800px; touch-action: none; user-select: none; -webkit-user-select: none; }
   .sheet { position: absolute; inset: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
-  #leaf { transform-origin: left center; transform-style: preserve-3d; z-index: 2; box-shadow: 0 0 0 rgba(0,0,0,0); }
+  #leaf { transform-origin: left center; z-index: 2; box-shadow: 0 0 0 rgba(0,0,0,0); }
   #under { z-index: 1; }
   #shade { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; }
   .pad { position: absolute; inset: 28px 26px 36px; overflow: hidden; }
-  .prose { font-size: var(--fs, 20px); line-height: 1.75; font-family: var(--font); height: 100%; }
-  .prose, .prose * { font-family: inherit !important; }
+  .prose {
+    font-size: var(--fs, 20px);
+    line-height: 1.75;
+    font-family: var(--font);
+    height: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    -webkit-text-size-adjust: 100%;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  .prose, .prose * {
+    font-family: var(--font) !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
   .vertical, .vertical * { writing-mode: vertical-rl !important; text-orientation: mixed !important; }
   .vertical .folio { writing-mode: horizontal-tb !important; }
   .prose p { margin: 0 0 0.85em; }
   .prose h1, .prose h2, .prose h3 { font-weight: 600; line-height: 1.35; margin: 0 0 0.6em; }
   .prose img { max-width: 100%; max-height: 70%; object-fit: contain; }
   .folio { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; letter-spacing: 0.12em; opacity: 0.55; font-family: "Iowan Old Style", Palatino, "Songti SC", serif; }
-  #measure { position: absolute; left: -12000px; top: 0; overflow: hidden; visibility: hidden; pointer-events: none; }
+  #measure { position: absolute; left: 0; top: 0; overflow: hidden; visibility: hidden; pointer-events: none; z-index: -1; }
   #measure .probe { height: 100%; }
   .pdfwrap { height: 100%; display: flex; align-items: center; justify-content: center; }
   canvas { display: block; background: white; box-shadow: 0 8px 24px rgba(40, 24, 10, 0.12); }
@@ -40,11 +62,12 @@
 <div id="measure"></div>
 <script>
 (function () {
+  var CJK = '"PingFang SC", "PingFang TC", "Hiragino Sans GB", "Heiti SC", "Songti SC", "Songti TC", "STSong", "Noto Serif CJK SC", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
   var FONTS = {
-    system: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Songti SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
-    pingfang: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif',
-    songti: '"Songti SC", "STSong", "Songti TC", "PMingLiU", "SimSun", "Noto Serif SC", serif',
-    kaiti: '"Kaiti SC", "STKaiti", "KaiTi", "BiauKai", serif'
+    system: '-apple-system, BlinkMacSystemFont, ' + CJK,
+    pingfang: CJK,
+    songti: '"Songti SC", "Songti TC", "STSong", "PMingLiU", "SimSun", "Source Han Serif SC", "Noto Serif CJK SC", "Noto Serif SC", serif',
+    kaiti: '"Kaiti SC", "Kaiti TC", "STKaiti", "KaiTi", "BiauKai", "Noto Serif CJK SC", serif'
   };
   var THEMES = {
     light: { paper: '#fbfbf8', ink: '#1c1c1c', deep: '#eceae4' },
@@ -113,8 +136,30 @@
     return el.scrollHeight > el.clientHeight + 2;
   }
 
+  function readableHtml(html) {
+    var parsed = null;
+    try { parsed = new DOMParser().parseFromString(String(html || ''), 'text/html'); } catch (err) { parsed = null; }
+    if (!parsed || !parsed.body) return '<p class="empty">这一章没有正文。</p>';
+    var styles = [];
+    parsed.querySelectorAll('style').forEach(function (node) { styles.push(node.textContent || ''); });
+    var body = parsed.body.cloneNode(true);
+    body.querySelectorAll('style,script,link,meta,iframe,object').forEach(function (node) { node.remove(); });
+    var text = (body.textContent || '').replace(/\s+/g, '');
+    if (!text && !body.querySelector('img,svg,canvas,table')) return '<p class="empty">这一章没有正文。</p>';
+    return (styles.length ? '<style>' + styles.join('\n') + '</style>' : '') + body.innerHTML;
+  }
+
+  function pageIsBlank(html) {
+    var holder = document.createElement('div');
+    holder.innerHTML = html || '';
+    holder.querySelectorAll('style,script').forEach(function (node) { node.remove(); });
+    return !(holder.textContent || '').replace(/\s+/g, '') && !holder.querySelector('img,svg,canvas,table');
+  }
+
   function paginate(html) {
+    html = readableHtml(html);
     var box = contentBox();
+    if (box.w < 48 || box.h < 48) return [html];
     measure.style.width = box.w + 'px';
     measure.style.height = box.h + 'px';
     measure.className = 'prose' + (state.settings.verticalTraditional ? ' vertical' : '');
@@ -181,6 +226,7 @@
 
     nodes.forEach(function (node) {
       if (node.nodeType === 3 && !(node.textContent || '').trim()) return;
+      if (node.nodeType === 1 && /^(STYLE|SCRIPT|LINK|META)$/.test(node.tagName)) return;
       page.appendChild(node);
       if (!overflows(measure)) return;
       page.removeChild(node);
@@ -198,6 +244,7 @@
     if (!page.childNodes.length && pages.length === 0) pages.push('<p class="empty">这一章没有正文。</p>');
     else if (page.childNodes.length) pages.push(page.innerHTML);
     measure.innerHTML = '';
+    pages = pages.filter(function (item) { return !pageIsBlank(item); });
     return pages.length ? pages : ['<p class="empty">这一章没有正文。</p>'];
   }
 
@@ -258,6 +305,15 @@
     var neighborIndex = Math.max(0, Math.min(neighborPages.length - 1, next.page));
     setHtml(underHtml, underFolio, neighborPages[neighborIndex] || '', neighborIndex, neighborPages.length);
     statusEl.style.display = 'none';
+    if ((stage.clientWidth < 48 || stage.clientHeight < 48) && (state.layoutTries || 0) < 8) {
+      state.layoutTries = (state.layoutTries || 0) + 1;
+      setTimeout(function () {
+        state.cache = {};
+        if (state.kind === 'html') showHtml(state.chapter, state.page, null);
+      }, 80);
+    } else if (stage.clientHeight >= 48) {
+      state.layoutTries = 0;
+    }
     report();
   }
 
@@ -287,10 +343,22 @@
     showHtml(state.chapter, state.page, dest);
   }
 
-  function commit(dest) {
+  function restLeaf() {
     leaf.style.transition = 'none';
     leaf.style.transform = 'none';
+    leaf.style.webkitTransform = 'none';
+    leaf.style.transformStyle = 'flat';
+    leaf.style.webkitTransformStyle = 'flat';
     shade.style.opacity = '0';
+  }
+
+  function armCurl() {
+    leaf.style.transformStyle = 'preserve-3d';
+    leaf.style.webkitTransformStyle = 'preserve-3d';
+  }
+
+  function commit(dest) {
+    restLeaf();
     if (!dest) {
       if (state.kind === 'pdf') renderPdf(state.page + 1, frontCanvas);
       else showHtml(state.chapter, state.page, null);
@@ -316,6 +384,7 @@
       var maxH = wrap.clientHeight || stage.clientHeight - 64;
       var base = page.getViewport({ scale: 1 });
       var scale = Math.min(maxW / base.width, maxH / base.height);
+      if (!isFinite(scale) || scale <= 0) scale = 1;
       var viewport = page.getViewport({ scale: scale });
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
@@ -473,10 +542,10 @@
     var dir = dx < 0 ? 1 : -1;
     var dest = neighbor(dir);
     if (!dest) {
-      shade.style.opacity = '0';
-      leaf.style.transform = 'none';
+      restLeaf();
       return;
     }
+    armCurl();
     if (!drag.painted || drag.dir !== dir) {
       drag.dir = dir;
       drag.painted = true;
@@ -506,9 +575,10 @@
       var x = start.x / width;
       if (x < 0.22) turn(-1);
       else if (x > 0.78) turn(1);
-      else post({ type: 'chrome' });
-      leaf.style.transform = 'none';
-      shade.style.opacity = '0';
+      else {
+        post({ type: 'chrome' });
+        restLeaf();
+      }
       return;
     }
     var dir = dx < 0 ? 1 : -1;
@@ -516,10 +586,10 @@
     var should = dest && (Math.abs(dx) > width * 0.22 || Math.abs(flick) > 0.65);
     leaf.style.transition = 'transform 420ms cubic-bezier(.2,.7,.2,1), box-shadow 420ms ease';
     if (!should) {
-      leaf.style.transform = 'none';
-      shade.style.opacity = '0';
+      restLeaf();
       return;
     }
+    armCurl();
     state.busy = true;
     var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
     var angle = vertical ? dir * 62 : dir * -62;
@@ -537,6 +607,7 @@
     var dest = neighbor(dir);
     if (!dest || state.busy) return;
     paintDestination(dest);
+    armCurl();
     state.busy = true;
     var vertical = state.settings.verticalTraditional && state.kind !== 'pdf';
     leaf.style.transition = 'transform 460ms cubic-bezier(.2,.7,.2,1)';

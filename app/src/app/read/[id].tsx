@@ -69,7 +69,7 @@ export default function ReadScreen() {
   if (error) {
     return (
       <View style={[styles.center, { backgroundColor: shelf.bg, padding: 24 }]}>
-        <Text style={styles.errorTitle}>{error.includes('DRM') ? '有 DRM 的书' : '打不开'}</Text>
+        <Text style={styles.errorTitle}>{error.includes('受数字版权保护') ? '有 DRM 的书' : '打不开'}</Text>
         <Text style={styles.errorBody}>{error}</Text>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>返回书架</Text>
@@ -118,6 +118,25 @@ export default function ReadScreen() {
           <Text numberOfLines={1} style={[styles.barTitle, { color: themeInk }]}>
             {loaded.title}
           </Text>
+          <Pressable
+            onPress={() => {
+              if (!progress) return;
+              void library.toggleBookmark(bookId, {
+                chapterIndex: progress.chapterIndex,
+                pageIndex: progress.pageIndex,
+                progress: progress.progress,
+                label: progress.chapterTitle || loaded.title,
+              });
+            }}
+          >
+            <Text style={[styles.barText, { color: themeInk }]}>
+              {(library.bookmarks[bookId] ?? []).some(
+                (mark) => progress && mark.chapterIndex === progress.chapterIndex && mark.pageIndex === progress.pageIndex,
+              )
+                ? '取消书签'
+                : '书签'}
+            </Text>
+          </Pressable>
           <Pressable onPress={() => setPanel(panel === 'toc' ? 'none' : 'toc')}>
             <Text style={[styles.barText, { color: themeInk }]}>目录</Text>
           </Pressable>
@@ -211,6 +230,20 @@ export default function ReadScreen() {
       {panel === 'toc' ? (
         <View style={[styles.toc, { paddingTop: insets.top + 64, backgroundColor: themePaper }]}>
           <ScrollView contentContainerStyle={{ padding: 18, gap: 8 }}>
+            <Text style={[styles.sheetTitle, { color: themeInk }]}>书签</Text>
+            {(library.bookmarks[bookId] ?? []).length === 0 ? <Text style={styles.note}>还没有书签。阅读时点上方「书签」记住这一页。</Text> : null}
+            {(library.bookmarks[bookId] ?? []).map((mark) => (
+              <Pressable
+                key={mark.id}
+                onPress={() => {
+                  setSeek({ nonce: Date.now(), progress: mark.progress });
+                  setPanel('none');
+                }}
+              >
+                <Text style={[styles.tocItem, { color: themeInk }]}>{mark.label} · 第 {mark.pageIndex + 1} 页</Text>
+              </Pressable>
+            ))}
+            <Text style={[styles.sheetTitle, { color: themeInk, marginTop: 12 }]}>目录</Text>
             {(loaded.toc.length ? loaded.toc : loaded.chapters.map((chapter, chapterIndex) => ({ title: chapter.title, chapterIndex }))).map((item, index) => (
               <Pressable
                 key={`${item.chapterIndex}-${index}`}

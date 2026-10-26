@@ -38,15 +38,11 @@ npx expo start --web --port 43123
 
 安装 Python 3.11 或更新版本，安装时勾选 **tcl/tk**（python.org 的安装包默认带）。
 
-```bat
-cd windows\BookPush
-py -3 -m pip install -r requirements.txt
-py -3 -m bookpush
-```
+双击 `windows\BookPush\run.bat`（或 `run.ps1`）。脚本先找 `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`，也认 313 / 311 / 310，找不到才试 `py -3` 和 `python`。这台电脑没有 py 启动器时也能打开。也可以把 python.exe 的完整路径放进环境变量 `BOOKSHELF_PYTHON`。
 
-也可以双击 `run.bat`。
+安装包需要自带 Tcl/Tk。python.org 的安装程序默认勾选。
 
-窗口里可以搜索手机、手填 IP 和端口、填写手机上的 4 位配对码、选择 pdf/epub/azw3，然后发送。进度条按文件字节前进。连不上时，状态栏会提示检查前台、配对码和防火墙。
+窗口打开后会搜索 `_bookshelf._tcp`。搜到 0 台时，把手机屏幕上的 IP、端口（默认 27780）和 4 位配对码填进「手工填写」。配对码不在 Bonjour 广播里。可以选 pdf、epub、azw3、azw、mobi、kf8。无 DRM 的 Kindle 文件在找到 Calibre 的 `ebook-convert` 时会先转成 EPUB；没找到就原样发送。有 DRM 的文件会停住并说明原因，不会去解除保护。进度条按文件字节前进。
 
 没有手机时，可以先开一个模拟收书服务，确认窗口能传文件：
 
@@ -99,12 +95,15 @@ Bundle ID 默认是 `com.fengyang.bookshelf`。要改的话，改 `app/app.json`
 
 也可以改用 AltStore：Windows 上运行 AltServer，手机装 AltStore，之后同一 Wi-Fi 下有机会自动续签。签名来源仍然是免费 Apple ID，期限同样大约 7 天。Sideloadly 是本说明的主路径。
 
+合并到 `main` 之后，这次推送会自动跑 **Unsigned iOS IPA**。想立刻重打：打开 Actions，选 **Unsigned iOS IPA**，点 **Run workflow**。跑完下载产物 `BookShelf-unsigned-ipa`，里面是未签名的 `BookShelf-unsigned.ipa`。工作流只做 `npm ci` 和 `scripts/package-unsigned-ipa.sh`，不登录 Apple，也不签名。
+
 ## 6. 把书传到手机
 
 1. 手机打开 BookShelf，停在「Wi-Fi 传书」，看到 IP、端口和 4 位配对码。
 2. 电脑打开 BookPush，搜索设备；搜不到就把手填 IP 和端口（默认 27780）。
-3. 输入配对码，选择书籍，点「开始传书」。
-4. 回到书架就能看到新书。之后可以关 Wi-Fi，阅读不需要网络。
+3. 点「加入书籍」，可以一次加入多本 PDF、EPUB、无 DRM 的 AZW3。点「移出」拿掉选中的几本，点「清空」倒掉队列。手机上已经收下的书不会被删掉。
+4. 输入配对码，点「开始传书」。其中一本失败（例如有 DRM）时，后面的书继续送。窗口用中文写出送出几本、失败几本。
+5. 回到书架就能看到新书。架上会显示本数。点封面打开，点「移出」再点一次确认拿走。之后可以关 Wi-Fi，阅读不需要网络。
 
 配对码只是避免同网里别人随手上传。传输没有加密。不要在咖啡馆的公共 Wi-Fi 上开着收书页。
 
@@ -114,11 +113,50 @@ Bundle ID 默认是 `com.fengyang.bookshelf`。要改的话，改 `app/app.json`
 
 - 文件头里的加密类型不是 0：界面显示「此文件受数字版权保护（DRM）」，并停住。
 - 程序没有解密步骤，也不包含任何解除 Kindle 保护的代码。
-- PalmDOC 压缩是公开的打包方式，可以解压成 HTML 再阅读。
-- Huff/CDIC 压缩会提示暂不支持，同样不会去绕过保护。
-- 请改用你有权阅读的 EPUB 或 PDF。不要为了打开受保护的书去找破解工具。
+- PalmDOC 压缩是公开的打包方式。KF8 的骨架和片段会拼回 HTML 再阅读。
+- 安装了 Calibre 时，BookPush 会先把无 DRM 的 AZW3 转成 EPUB。没装 Calibre 就直接把原文件交给手机，并在窗口里说明。
+- Huff/CDIC 压缩和 KFX 会提示暂不支持，同样不会去绕过保护。
+- 请改用你有权阅读的 EPUB 或 PDF，或使用 Amazon 自己的阅读器。不要为了打开受保护的书去找破解工具。
 
-PDF 是固定版式，竖排和简转繁对它不起作用。中文排版在 EPUB 和可解析的 AZW3 里。
+PDF 是固定版式，竖排和简转繁对它不起作用。中文排版在 EPUB 和可解析的 AZW3 里。阅读器强制使用苹方、宋体、楷体和 Noto / 思源这一组中文字体，避免正文被写成空白。目录和书签在阅读页里。进度记章节、页码和 0 到 1 的位置。
+
+## 能打开什么
+
+| 内容 | 结果 |
+| --- | --- |
+| PDF | 能读。固定版式，不重排，竖排和简转繁对它不起作用。 |
+| EPUB | 能读。折页、字号、白 / 羊皮纸 / 夜、亮度、竖排繁体、目录、书签、进度。 |
+| 无 DRM 的 AZW3、KF8、MOBI、AZW、PRC | 能读。PalmDOC 按记录解压，KF8 拼回骨架和片段。 |
+| Huff/CDIC、KFX | 中文提示暂不支持，不解码，也不解除保护。 |
+| 有 DRM 的 AZW3 | 停在「受数字版权保护」。没有解密步骤。 |
+| iOS | 15.1 及以上（React Native 0.88）。本地网络权限被拒绝后，要到「设置 → 隐私与安全性 → 本地网络」打开 BookShelf，搜索才会离开 0 台。 |
+| 界面 | 手机和 BookPush 都是简体中文。 |
+
+Expo Go 没有 TCP 和 Bonjour，不能用来验证传书。必须是上面的 IPA。
+
+## 从安装到核对字形
+
+1. 用上一节的 Actions 产物，经 Sideloadly 和免费 Apple ID 装进 iPhone。
+2. 打开「设置 → 通用 → VPN 与设备管理」，信任刚才的描述文件。
+3. 打开 BookShelf，进入「Wi-Fi 传书」，点允许「本地网络」。屏幕上会有 IP、端口和 4 位配对码。
+4. 双击 `windows\BookPush\run.bat` 打开 BookPush（没有 py 启动器也会找 Python312）。同一 Wi-Fi，关掉 VPN，不要用访客网络。搜到手机就选中；列表是 0 台就把那三项填进「手工填写」。防火墙询问时允许 Python 访问专用网络（UDP 5353 和到手机端口的 TCP）。
+5. 在 BookPush 里一次加入 `samples/` 的四本：`window.epub`、`vertical-traditional.epub`、`notes.pdf`、`window-free.azw3`。确认列表是 4 本，移出再加回一本，然后开始传书。
+6. 手机书架应显示这四本，标题能读。用搜索框按书名、作者或文件名过滤，排序可以换成书名、作者、进度或最近读过。再点一次「移出」可以拿走其中一本，其余还在。
+7. 逐本打开。中文应是字形而不是方框：《窗下》能看到「雨下到后半夜」；打开「竖排繁体」后直行仍有字，繁体样本能看到「窗下有雨」。英文 PDF 能看到 “Notes from a paper shelf”，不是空白页。无 DRM 的 AZW3 能看到「没有数字版权保护」。左右翻页后字形还在。
+8. 若另有一本受保护的 AZW3，和别的书一起传：受保护的那本失败并写明「受数字版权保护」，其余书仍然送到。页面上没有破解提示。
+
+电脑上可以先跑自动检查，再做上面的手测：
+
+```bat
+cd app
+npm test
+cd ..\windows\BookPush
+python -m unittest discover -s tests -v
+cd ..\..
+node scripts\verify-reader-glyphs.mjs
+```
+
+最后一条需要本机的 Chrome，用来确认示例书的中文、英文和竖排真的画出来了，而不是空白页。没有 Chrome 时，前两条测试仍然检查解析出的正文。
 
 竖排繁体使用 CSS `writing-mode: vertical-rl`。简体正文会按 OpenCC 字词表显示成繁体，原文件不改。个别多义字可能选错，这是显示转换的限制。
 
@@ -134,9 +172,8 @@ npx tsc --noEmit
 npx expo start --web --port 43123
 
 cd ..\windows\BookPush
-py -3 -m pip install -r requirements.txt
-py -3 -m bookpush
-py -3 -m unittest discover -s tests -v
+run.bat
+python -m unittest discover -s tests -v
 ```
 
 重新生成示例文件：
