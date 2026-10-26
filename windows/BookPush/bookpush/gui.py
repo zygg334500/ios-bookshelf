@@ -8,15 +8,21 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 
 from bookpush.discovery import Device, browse
-from bookpush.queue import PushQueue, describe_batch, push_batch
+from bookpush.kindle import (
+    CALIBRE_MISSING,
+    find_converter,
+    load_converter_pref,
+    save_converter_pref,
+)
+from bookpush.queue import PushQueue, TransferProgress, describe_batch, push_batch
 
 
 class BookPushApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("BookPush 传书")
-        self.root.geometry("920x640")
-        self.root.minsize(760, 560)
+        self.root.geometry("960x760")
+        self.root.minsize(800, 640)
         self.root.configure(bg="#E6DDD0")
         self.devices: list[Device] = []
         self.queue = PushQueue()
@@ -42,7 +48,7 @@ class BookPushApp:
         ttk.Label(outer, text="BookPush 传书", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             outer,
-            text="把 PDF、EPUB 或无 DRM 的 AZW3 送到同一 Wi-Fi 下的 iPhone。不经过互联网。",
+            text="把 PDF、EPUB 送到同一 Wi-Fi 下的 iPhone。无 DRM 的 AZW3 / AZW 会先转成 EPUB。不经过互联网，也不解除保护。",
         ).pack(anchor="w", pady=(0, 12))
 
         body = ttk.Frame(outer)
@@ -90,13 +96,24 @@ class BookPushApp:
         ttk.Button(row, text="移出", command=self.remove_selected).pack(side="left", padx=8)
         ttk.Button(row, text="清空", command=self.clear_queue).pack(side="left")
         ttk.Button(row, text="开始传书", command=self.send).pack(side="right")
+        detected = load_converter_pref() or find_converter()
+        self.converter = tk.StringVar(value=str(detected) if detected else "")
+        ttk.Label(right, text="ebook-convert（Windows 默认先找 Calibre2）", style="Card.TLabel").pack(anchor="w", pady=(10, 0))
+        ttk.Entry(right, textvariable=self.converter).pack(fill="x")
+        self.convert_progress = ttk.Progressbar(right, mode="determinate", maximum=100)
+        self.convert_progress.pack(fill="x", pady=(12, 4))
+        self.convert_status = ttk.Label(right, text="转换：还没有开始。", style="Card.TLabel", wraplength=340, justify="left")
+        self.convert_status.pack(anchor="w")
         self.progress = ttk.Progressbar(right, mode="determinate", maximum=100)
-        self.progress.pack(fill="x", pady=(12, 6))
-        self.status = ttk.Label(right, text="还没有开始。", style="Card.TLabel")
+        self.progress.pack(fill="x", pady=(8, 4))
+        self.status = ttk.Label(right, text="发送：还没有开始。", style="Card.TLabel", wraplength=340, justify="left")
         self.status.pack(anchor="w")
         self.log = tk.Text(right, height=8, wrap="word", font=("Microsoft YaHei UI", 9), bg="#FBF7F0")
         self.log.pack(fill="both", expand=True, pady=(8, 0))
         self._write("传书时请让手机停在「Wi-Fi 传书」，并允许本地网络。搜不到就填手机上的 IP、端口和配对码。")
+        self._write(self._converter_hint())
+        self._pending_progress: TransferProgress | None = None
+        self._progress_job: str | None = None
         self.search()
 
     def _field(self, parent: ttk.Frame, label: str, variable: tk.StringVar) -> None:
@@ -170,6 +187,45 @@ class BookPushApp:
         self._refresh_queue()
         self._write(f"清空了 {count} 本。手机上已经收下的书不会被删掉。")
 
+    def _converter_hint(self) -> str:
+        path = self.converter.get().strip()
+        if path:
+            return (
+                f"已检测到官方 Calibre：{path}。无 DRM 的 AZW3 先在本机转成 EPUB；"
+                "本机转不了时再用这个 ebook-convert。不会使用 DeDRM。"
+            )
+        return (
+            "还没有检测到 Calibre。能解析的无 DRM AZW3 仍会在本机直接转成 EPUB。"
+            + CALIBRE_MISSING
+        )
+
+    def _show_progress(self, event: TransferProgress) -> None:
+        self._pending_progress = event
+        if self._progress_job is None:
+            self._progress_job = self.root.after(40, self._flush_progress)
+
+    def _flush_progress(self) -> None:
+        self._progress_job = None
+        event = self._pending_progress
+        if event is None:
+            return
+        total = max(event.total, 1)
+        value = 100 * event.current / total
+        if event.phase == "convert":
+            label = f"正在转换 {event.current}/{event.total}"
+            if event.name:
+                label += f"：{event.name}"
+            self.convert_status.configure(text=label)
+            self.convert_progress.configure(value=value)
+            return
+        label = f"正在发送 {event.current}/{event.total}"
+        if event.name:
+            label += f"：{event.name}"
+        if event.detail:
+            label += f"（{event.detail}）"
+        self.status.configure(text=label)
+        self.progress.configure(value=value)
+
     def send(self) -> None:
         if self._sending:
             self.status.configure(text="这一批还在发送，请稍等。")
@@ -188,12 +244,37 @@ class BookPushApp:
         if not files:
             self.status.configure(text="请先加入至少一本书。")
             return
+        configured = self.converter.get().strip()
+        save_converter_pref(configured)
+        tool = Path(configured) if configured else None
+        if tool is not None and not tool.is_file():
+            self.status.configure(text="填写的 ebook-convert 不存在。需要 Calibre 的那一本会被跳过。")
+            self._write(f"找不到填写的转换程序：{configured}")
+            self._write(CALIBRE_MISSING)
+            tool = None
+            search = False
+            missing = f"找不到填写的转换程序：{configured}。{CALIBRE_MISSING}"
+        else:
+            search = tool is None
+            missing = None
         self._sending = True
+        self.convert_progress.configure(value=0)
         self.progress.configure(value=0)
-        self.status.configure(text=f"正在发送 {len(files)} 本…")
+        self.convert_status.configure(text="正在准备转换…")
+        self.status.configure(text="发送：等待可以上传的书。")
 
         def work() -> None:
-            outcomes = push_batch(files, host, port, pin)
+            outcomes = push_batch(
+                files,
+                host,
+                port,
+                pin,
+                on_progress=lambda event: self.root.after(0, lambda event=event: self._show_progress(event)),
+                converter=tool,
+                search=search,
+                missing_message=missing,
+            )
+
             def finish() -> None:
                 self._sending = False
                 for item in outcomes:
@@ -205,9 +286,12 @@ class BookPushApp:
                         self._write(f"{item.name} 失败：{item.detail}")
                 summary = describe_batch(outcomes)
                 self.status.configure(text=summary)
+                self.convert_status.configure(text="转换这一批已经结束。")
                 self._write(summary)
                 sent = len([item for item in outcomes if item.ok])
                 self.progress.configure(value=100 if outcomes and sent == len(outcomes) else (100 * sent / max(len(outcomes), 1)))
+                if outcomes:
+                    self.convert_progress.configure(value=100)
 
             self.root.after(0, finish)
 

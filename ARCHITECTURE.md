@@ -19,7 +19,18 @@ Windows 上开发和预览界面。iPhone 上的安装包由云端 Mac 编译成
 | EPUB | 解开 ZIP，读 `META-INF/container.xml` 和 OPF 的 metadata / manifest / spine。目录来自 `nav` 或 NCX。图片和 CSS 收成 data URI。 | 同一套 HTML 分页器。 |
 | AZW3 | 只接受 PalmDB + `BOOKMOBI`。加密字段不是 0 就拒绝。每条正文记录先去掉公开的尾随数据，再按记录做 PalmDOC（压缩 2）或原文（压缩 1）。KF8 按 FDST 分段，再用骨架和片段索引把正文拼回 HTML。KFX 直接拒绝。Huff/CDIC（17480）报「不支持」，不解码。 | 与 EPUB 相同。 |
 
-AZW3 **不会**实现 DRM 解除。加密样本在解析前就抛出 `BookError('DRM')`，界面写明文件受数字版权保护。BookPush 若找到 Calibre 的 `ebook-convert`，会把无 DRM 的 AZW3 转成 EPUB 再传；没有转换器就原样发送，并由手机按上面的规则打开。
+AZW3 **不会**实现 DRM 解除。加密样本在解析前就抛出 `BookError('DRM')`，界面写明文件受数字版权保护。
+
+BookPush 传书前把无 DRM 的 AZW3 / AZW / MOBI / KF8 / PRC 转成 EPUB，手机书架收到的是 EPUB。PDF 和 EPUB 仍原样发送。
+
+转换分两段，都不会调用 DeDRM 或 Kindle 密钥：
+
+1. **本机快路径。** `bookpush/fastconvert.py` 用本书架自己的 PalmDOC / KF8 解析器在进程池里生成 EPUB（每个 CPU 一个进程，并尽量绑定到对应的核）。内容按 SHA-256 缓存，同一份字节再传时不再转换。缓存目录在 Windows 上是 `%LOCALAPPDATA%\BookPush\epub-cache`（一般在系统盘 SSD），也可以用 `BOOKSHELF_CONVERT_CACHE` 改位置。
+2. **官方 Calibre 后备。** 快路径拿不到正文（例如 Huff/CDIC）时，才调用电脑上已经安装的 Calibre。Windows 上**先**找 `C:\Program Files\Calibre2\ebook-convert.exe`，再搜 PATH；`BOOKSHELF_EBOOK_CONVERT` 或窗口里的路径优先。优先启动少量常驻的 `calibre-debug -e` 工作进程（启动一次，连续转多本），启动失败再退回并行的 `ebook-convert`。两种方式都只传输入和输出路径，并设置独立的 `CALIBRE_CONFIG_DIRECTORY`，因此用户配置目录里的第三方插件（包括 DeDRM）不会被加载。
+
+Calibre 本体是 GPL-3.0，转换插件还依赖它自带的 Python 和二进制扩展。BookPush 不把这些源码或插件拷进仓库：那样既要按 GPL 再许可整个程序，在系统 Python 里也导入不了。合法的加速方式就是上面的本机快路径，加上对已安装官方 Calibre 的进程池、核绑定和内容缓存。
+
+有 DRM 的文件在调用任何转换器之前就跳过，窗口用中文说明不会解除保护。Calibre 自己也因 DRM 失败时，同样跳过这一本，队列里的其他书继续。没装 Calibre、而快路径又转不了时，提示到 https://calibre-ebook.com/ 安装官方版本，并写明不要安装 DeDRM。
 
 简转繁只发生在打开阅读器、并且打开了「竖排繁体」的时候。用的是 OpenCC 的 `STCharacters.txt` 与 `STPhrases.txt`，最长匹配。原文件不改。多义字取表里的第一项，所以「发」一类的字可能不是期望的那个。
 
