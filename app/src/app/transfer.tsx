@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../storage/library';
 import { getTransferSnapshot, restartTransfer, subscribeTransfer, type TransferSnapshot } from '../transfer/server';
 import { QrCode } from '../ui/QrCode';
+import { shelfContentPadding } from '../ui/insets';
 import { fonts, shelf } from '../ui/theme';
 
 export default function TransferScreen() {
@@ -23,7 +24,8 @@ export default function TransferScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32, paddingHorizontal: 18 }}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ ...shelfContentPadding(insets), paddingBottom: insets.bottom + 28 }}
     >
       <Pressable onPress={() => router.back()}>
         <Text style={styles.back}>返回书架</Text>

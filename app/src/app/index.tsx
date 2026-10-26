@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Image,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,11 +14,82 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { filterAndSortBooks, shelfCountLabel, summarizeImports, type ImportAttempt, type ShelfSort } from '../core/shelf';
+import {
+  filterAndSortBooks,
+  readingStatus,
+  readingStatusLabel,
+  shelfCountLabel,
+  statusCounts,
+  statusSummary,
+  summarizeImports,
+  type ImportAttempt,
+  type ShelfFilter,
+  type ShelfSort,
+} from '../core/shelf';
 import { useLibrary, type ShelfBook } from '../storage/library';
 import { readAssetBytes } from '../reader/assets';
+import { shelfContentPadding } from '../ui/insets';
 import { bundledSamples } from '../ui/samples';
 import { clothColor, fonts, shelf } from '../ui/theme';
+
+const BookCell = memo(function BookCell({
+  book,
+  width,
+  pending,
+  onOpen,
+  onRemove,
+  onMark,
+}: {
+  book: ShelfBook;
+  width: number;
+  pending: boolean;
+  onOpen: (id: string) => void;
+  onRemove: (book: ShelfBook) => void;
+  onMark: (book: ShelfBook) => void;
+}) {
+  const height = Math.round(width * 1.48);
+  const status = readingStatus(book);
+  return (
+    <View style={{ width, marginBottom: 16 }}>
+      <Pressable onPress={() => onOpen(book.id)} onLongPress={() => onRemove(book)}>
+        {book.coverUri ? (
+          <View style={[styles.cover, { width, height }]}>
+            <Image source={{ uri: book.coverUri }} style={{ width, height }} resizeMode="cover" fadeDuration={0} />
+            <Text style={styles.badge}>{book.format.toUpperCase()}</Text>
+          </View>
+        ) : (
+          <View style={[styles.cover, styles.cloth, { width, height, backgroundColor: clothColor(book.id) }]}>
+            <View style={styles.spine} />
+            <Text numberOfLines={4} style={styles.clothTitle}>
+              {book.title}
+            </Text>
+            <Text style={styles.badgeLight}>{book.format.toUpperCase()}</Text>
+          </View>
+        )}
+        <Text numberOfLines={2} style={styles.bookTitle}>
+          {book.title}
+        </Text>
+        <Text numberOfLines={1} style={styles.bookAuthor}>
+          {book.author}
+        </Text>
+        <Text style={[styles.status, status === 'finished' && styles.statusDone]}>{readingStatusLabel(status)}</Text>
+      </Pressable>
+      {book.progress > 0.01 ? (
+        <View style={styles.track}>
+          <View style={[styles.fill, { width: `${Math.min(100, book.progress * 100)}%` }]} />
+        </View>
+      ) : null}
+      <View style={styles.cardActions}>
+        <Pressable onPress={() => onRemove(book)} hitSlop={6}>
+          <Text style={[styles.remove, pending && styles.removeArmed]}>{pending ? '确认移出' : '移出'}</Text>
+        </Pressable>
+        <Pressable onPress={() => onMark(book)} hitSlop={6}>
+          <Text style={styles.remove}>{status === 'finished' ? '标为在读' : '标为读完'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+});
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -29,7 +101,13 @@ export default function LibraryScreen() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ShelfSort>('recent');
-  const visibleBooks = filterAndSortBooks(library.books, query, sort);
+  const [statusFilter, setStatusFilter] = useState<ShelfFilter>('all');
+  const padding = shelfContentPadding(insets);
+  const visibleBooks = useMemo(
+    () => filterAndSortBooks(library.books, query, sort, statusFilter),
+    [library.books, query, sort, statusFilter],
+  );
+  const counts = useMemo(() => statusCounts(library.books), [library.books]);
   const sortChoices: { id: ShelfSort; label: string }[] = [
     { id: 'recent', label: '最近加入' },
     { id: 'title', label: '书名' },
@@ -37,9 +115,15 @@ export default function LibraryScreen() {
     { id: 'progress', label: '进度' },
     { id: 'opened', label: '最近读过' },
   ];
+  const filterChoices: { id: ShelfFilter; label: string }[] = [
+    { id: 'all', label: '全部' },
+    { id: 'unread', label: '未读' },
+    { id: 'reading', label: '阅读中' },
+    { id: 'finished', label: '已完成' },
+  ];
   const columns = width >= 1100 ? 6 : width >= 840 ? 5 : width >= 640 ? 4 : 3;
-  const gap = 16;
-  const itemWidth = Math.floor((Math.min(width, 1200) - 36 - gap * (columns - 1)) / columns);
+  const gap = 12;
+  const itemWidth = Math.floor((width - padding.paddingLeft - padding.paddingRight - gap * (columns - 1)) / columns);
 
   const importPicked = async () => {
     setMessage(null);
@@ -100,7 +184,7 @@ export default function LibraryScreen() {
     }
   };
 
-  const askRemove = (book: ShelfBook) => {
+  const askRemove = useCallback((book: ShelfBook) => {
     if (pendingDelete === book.id) {
       setPendingDelete(null);
       void library.removeBook(book.id);
@@ -109,13 +193,39 @@ export default function LibraryScreen() {
     }
     setPendingDelete(book.id);
     setMessage(`再点一次「移出」，确认拿走《${book.title}》。文件会从这台设备上删除。`);
-  };
+  }, [library, pendingDelete]);
 
-  return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={{ paddingTop: insets.top + 18, paddingBottom: insets.bottom + 28, paddingHorizontal: 18 }}
-    >
+  const openBook = useCallback(
+    (id: string) => {
+      router.push(`/read/${id}`);
+    },
+    [router],
+  );
+
+  const markBook = useCallback(
+    (book: ShelfBook) => {
+      const status = readingStatus(book);
+      void library.markBook(book.id, status === 'finished' ? 'reading' : 'finished');
+    },
+    [library],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: ShelfBook }) => (
+      <BookCell
+        book={item}
+        width={itemWidth}
+        pending={pendingDelete === item.id}
+        onOpen={openBook}
+        onRemove={askRemove}
+        onMark={markBook}
+      />
+    ),
+    [askRemove, itemWidth, markBook, openBook, pendingDelete],
+  );
+
+  const header = (
+    <View>
       <View style={styles.header}>
         <View style={styles.seal}>
           <Text style={styles.sealText}>书</Text>
@@ -126,11 +236,14 @@ export default function LibraryScreen() {
           <Text style={styles.sub}>离线阅读。PDF、EPUB，以及没有 DRM 的 AZW3。</Text>
           <Text style={styles.sub}>
             {library.ready
-              ? query.trim()
-                ? `架上 ${library.books.length} 本，符合 ${visibleBooks.length} 本。`
-                : shelfCountLabel(library.books.length)
+              ? library.books.length === 0
+                ? shelfCountLabel(0)
+                : query.trim() || statusFilter !== 'all'
+                  ? `架上 ${library.books.length} 本，符合 ${visibleBooks.length} 本。`
+                  : `架上 ${library.books.length} 本。点封面打开。`
               : '正在打开书架…'}
           </Text>
+          {library.ready && library.books.length > 0 ? <Text style={styles.sub}>{statusSummary(counts)}</Text> : null}
         </View>
       </View>
       <View style={styles.actions}>
@@ -147,12 +260,6 @@ export default function LibraryScreen() {
       {busy ? <ActivityIndicator color={shelf.accent} style={{ marginVertical: 12 }} /> : null}
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {library.error ? <Text style={styles.message}>{library.error}</Text> : null}
-      {!library.ready && !library.error ? (
-        <View style={styles.empty}>
-          <ActivityIndicator color={shelf.accent} />
-          <Text style={styles.emptyBody}>正在打开书架…</Text>
-        </View>
-      ) : null}
       {library.ready && library.books.length > 0 ? (
         <View style={styles.searchBlock}>
           <TextInput
@@ -165,6 +272,17 @@ export default function LibraryScreen() {
             clearButtonMode="while-editing"
           />
           <View style={styles.sortRow}>
+            {filterChoices.map((choice) => (
+              <Pressable
+                key={choice.id}
+                onPress={() => setStatusFilter(choice.id)}
+                style={[styles.sortChip, statusFilter === choice.id && styles.sortChipOn]}
+              >
+                <Text style={[styles.sortText, statusFilter === choice.id && styles.sortTextOn]}>{choice.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.sortRow}>
             {sortChoices.map((choice) => (
               <Pressable key={choice.id} onPress={() => setSort(choice.id)} style={[styles.sortChip, sort === choice.id && styles.sortChipOn]}>
                 <Text style={[styles.sortText, sort === choice.id && styles.sortTextOn]}>{choice.label}</Text>
@@ -173,67 +291,49 @@ export default function LibraryScreen() {
           </View>
         </View>
       ) : null}
-      {library.ready && library.books.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>还没有书</Text>
-          <Text style={styles.emptyBody}>
-            可以从这台设备导入，也可以先放入内置示例，看看翻页、字体和竖排繁体。装到 iPhone 之后，用 Windows 的 BookPush 经家里的 Wi-Fi 把书送进来。
-          </Text>
-        </View>
-      ) : visibleBooks.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>没有符合的书</Text>
-          <Text style={styles.emptyBody}>换一个书名、作者或文件名再搜。架子上的书还在。</Text>
-        </View>
-      ) : (
-        <View style={[styles.grid, { gap }]}>
-          {visibleBooks.map((book) => (
-            <View key={book.id} style={{ width: itemWidth }}>
-              <Pressable onPress={() => router.push(`/read/${book.id}`)} onLongPress={() => askRemove(book)}>
-                <Cover book={book} width={itemWidth} />
-                <Text numberOfLines={2} style={styles.bookTitle}>
-                  {book.title}
-                </Text>
-                <Text numberOfLines={1} style={styles.bookAuthor}>
-                  {book.author}
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => askRemove(book)} hitSlop={6}>
-                <Text style={[styles.remove, pendingDelete === book.id && styles.removeArmed]}>
-                  {pendingDelete === book.id ? '确认移出' : '移出'}
-                </Text>
-              </Pressable>
-              {book.progress > 0.01 ? (
-                <View style={styles.track}>
-                  <View style={[styles.fill, { width: `${Math.min(100, book.progress * 100)}%` }]} />
-                </View>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
-  );
-}
-
-function Cover({ book, width }: { book: ShelfBook; width: number }) {
-  const height = Math.round(width * 1.48);
-  if (book.coverUri) {
-    return (
-      <View style={[styles.cover, { width, height }]}>
-        <Image source={{ uri: book.coverUri }} style={{ width, height }} resizeMode="cover" />
-        <Text style={styles.badge}>{book.format.toUpperCase()}</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={[styles.cover, styles.cloth, { width, height, backgroundColor: clothColor(book.id) }]}>
-      <View style={styles.spine} />
-      <Text numberOfLines={4} style={styles.clothTitle}>
-        {book.title}
-      </Text>
-      <Text style={styles.badgeLight}>{book.format.toUpperCase()}</Text>
     </View>
+  );
+
+  const empty = !library.ready && !library.error ? (
+    <View style={styles.empty}>
+      <ActivityIndicator color={shelf.accent} />
+      <Text style={styles.emptyBody}>正在打开书架…</Text>
+    </View>
+  ) : library.ready && library.books.length === 0 ? (
+    <View style={styles.empty}>
+      <Text style={styles.emptyTitle}>还没有书</Text>
+      <Text style={styles.emptyBody}>
+        可以从这台设备导入，也可以先放入内置示例，看看翻页、字体和竖排。装到 iPhone 之后，用 Windows 的 BookPush 经家里的 Wi-Fi 把书送进来。
+      </Text>
+    </View>
+  ) : library.ready ? (
+    <View style={styles.empty}>
+      <Text style={styles.emptyTitle}>{statusFilter === 'all' ? '没有符合的书' : `没有${readingStatusLabel(statusFilter)}的书`}</Text>
+      <Text style={styles.emptyBody}>换一个书名、作者、文件名或阅读状态再看。架子上的书还在。</Text>
+    </View>
+  ) : undefined;
+
+  return (
+    <FlatList
+      style={styles.screen}
+      data={library.ready ? visibleBooks : []}
+      key={columns}
+      keyExtractor={(book) => book.id}
+      numColumns={columns}
+      renderItem={renderItem}
+      ListHeaderComponent={header}
+      ListEmptyComponent={empty}
+      columnWrapperStyle={columns > 1 ? { gap } : undefined}
+      contentContainerStyle={padding}
+      contentInsetAdjustmentBehavior="never"
+      keyboardShouldPersistTaps="handled"
+      removeClippedSubviews={Platform.OS === 'ios'}
+      initialNumToRender={9}
+      maxToRenderPerBatch={6}
+      windowSize={7}
+      updateCellsBatchingPeriod={50}
+      extraData={pendingDelete}
+    />
   );
 }
 
@@ -304,10 +404,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: fonts.display, fontSize: 28, color: shelf.ink },
   emptyBody: { fontFamily: fonts.ui, color: shelf.muted, lineHeight: 22 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
   bookTitle: { marginTop: 8, color: shelf.ink, fontFamily: fonts.ui, fontSize: 14, lineHeight: 18 },
   bookAuthor: { color: shelf.muted, fontFamily: fonts.ui, fontSize: 12, marginTop: 2 },
-  remove: { color: shelf.accent, fontFamily: fonts.ui, fontSize: 12, marginTop: 4 },
+  status: { color: shelf.muted, fontFamily: fonts.ui, fontSize: 12, marginTop: 2 },
+  statusDone: { color: shelf.accent },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 4, marginTop: 4 },
+  remove: { color: shelf.accent, fontFamily: fonts.ui, fontSize: 12 },
   removeArmed: { fontWeight: '700' },
   track: { height: 3, backgroundColor: shelf.line, borderRadius: 99, marginTop: 6, overflow: 'hidden' },
   fill: { height: 3, backgroundColor: shelf.accent },

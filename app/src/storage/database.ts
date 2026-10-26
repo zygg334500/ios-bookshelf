@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import type { BookFormat, BookRecord } from '../core/types';
+import { normalizeReadingMark } from '../core/shelf';
+import type { BookFormat, BookRecord, ReadingMark } from '../core/types';
 import { MemoryLibrary, type LibraryStore } from './memory';
 
 const WEB_KEY = 'bookshelf.library.v1';
@@ -16,6 +17,7 @@ type Row = {
   page_index: number;
   progress: number;
   cover_name: string | null;
+  reading_mark?: string | null;
 };
 
 function fromRow(row: Row): BookRecord {
@@ -31,6 +33,7 @@ function fromRow(row: Row): BookRecord {
     pageIndex: row.page_index,
     progress: row.progress,
     coverName: row.cover_name,
+    readingMark: normalizeReadingMark(row.reading_mark),
   };
 }
 
@@ -50,13 +53,18 @@ async function openSqlite(): Promise<LibraryStore> {
       chapter_index INTEGER NOT NULL DEFAULT 0,
       page_index INTEGER NOT NULL DEFAULT 0,
       progress REAL NOT NULL DEFAULT 0,
-      cover_name TEXT
+      cover_name TEXT,
+      reading_mark TEXT NOT NULL DEFAULT 'auto'
     );
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL
     );
   `);
+  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(books)');
+  if (!columns.some((column) => column.name === 'reading_mark')) {
+    await db.execAsync("ALTER TABLE books ADD COLUMN reading_mark TEXT NOT NULL DEFAULT 'auto'");
+  }
   return {
     async list() {
       const rows = await db.getAllAsync<Row>('SELECT * FROM books ORDER BY added_at DESC');
@@ -64,8 +72,8 @@ async function openSqlite(): Promise<LibraryStore> {
     },
     async insert(book) {
       await db.runAsync(
-        `INSERT INTO books (id, title, author, format, file_name, added_at, last_opened_at, chapter_index, page_index, progress, cover_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO books (id, title, author, format, file_name, added_at, last_opened_at, chapter_index, page_index, progress, cover_name, reading_mark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            title = excluded.title,
            author = excluded.author,
@@ -83,6 +91,7 @@ async function openSqlite(): Promise<LibraryStore> {
         book.pageIndex,
         book.progress,
         book.coverName,
+        normalizeReadingMark(book.readingMark),
       );
     },
     async remove(id) {
@@ -97,6 +106,9 @@ async function openSqlite(): Promise<LibraryStore> {
         Date.now(),
         id,
       );
+    },
+    async updateReadingMark(id, mark: ReadingMark) {
+      await db.runAsync('UPDATE books SET reading_mark = ? WHERE id = ?', normalizeReadingMark(mark), id);
     },
     async touch(id) {
       await db.runAsync('UPDATE books SET last_opened_at = ? WHERE id = ?', Date.now(), id);
@@ -148,6 +160,10 @@ function webMemoryStore(): LibraryStore {
     },
     updatePosition: async (id, chapterIndex, pageIndex, progress) => {
       await memory.updatePosition(id, chapterIndex, pageIndex, progress);
+      save();
+    },
+    updateReadingMark: async (id, mark) => {
+      await memory.updateReadingMark(id, mark);
       save();
     },
     touch: async (id) => {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { filterAndSortBooks, shelfCountLabel, summarizeImports, type ShelfEntry } from './shelf';
+import {
+  filterAndSortBooks,
+  readingStatus,
+  readingStatusLabel,
+  shelfCountLabel,
+  statusCounts,
+  statusSummary,
+  summarizeImports,
+  type ShelfEntry,
+} from './shelf';
 
 describe('shelf batch', () => {
   it('keeps the books that imported when one file fails', () => {
@@ -34,5 +43,27 @@ describe('shelf batch', () => {
     expect(filterAndSortBooks(books, '', 'progress')[0]?.title).toBe('纸边笔记');
     expect(filterAndSortBooks(books, '', 'opened')[0]?.title).toBe('无锁的样本');
     expect(filterAndSortBooks(books, '没有这本书', 'recent')).toEqual([]);
+  });
+
+  it('derives 未读, 阅读中, and 已完成, and lets a manual mark win', () => {
+    expect(readingStatus({ progress: 0, lastOpenedAt: null })).toBe('unread');
+    expect(readingStatus({ progress: 0, lastOpenedAt: 10 })).toBe('reading');
+    expect(readingStatus({ progress: 0.4, lastOpenedAt: 10 })).toBe('reading');
+    expect(readingStatus({ progress: 1, lastOpenedAt: 10 })).toBe('finished');
+    expect(readingStatus({ progress: 0.2, lastOpenedAt: 10, readingMark: 'finished' })).toBe('finished');
+    expect(readingStatus({ progress: 1, lastOpenedAt: 10, readingMark: 'reading' })).toBe('reading');
+    expect(readingStatusLabel('unread')).toBe('未读');
+    expect(readingStatusLabel('reading')).toBe('阅读中');
+    expect(readingStatusLabel('finished')).toBe('已完成');
+
+    const books: ShelfEntry[] = [
+      { title: '窗下', author: '甲', fileName: 'window.epub', addedAt: 1, progress: 0.2, lastOpenedAt: 5 },
+      { title: '纸边笔记', author: '乙', fileName: 'notes.pdf', addedAt: 3, progress: 0, lastOpenedAt: null },
+      { title: '无锁的样本', author: '甲', fileName: 'window-free.azw3', addedAt: 2, progress: 1, lastOpenedAt: 9 },
+    ];
+    expect(statusSummary(statusCounts(books))).toBe('未读 1 · 阅读中 1 · 已完成 1');
+    expect(filterAndSortBooks(books, '', 'title', 'finished').map((book) => book.title)).toEqual(['无锁的样本']);
+    expect(filterAndSortBooks(books, '甲', 'recent', 'reading').map((book) => book.title)).toEqual(['窗下']);
+    expect(filterAndSortBooks(books, '', 'recent', 'unread').map((book) => book.title)).toEqual(['纸边笔记']);
   });
 });

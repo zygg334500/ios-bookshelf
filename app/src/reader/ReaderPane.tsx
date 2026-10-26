@@ -4,8 +4,10 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { toBase64 } from '../core/binary';
 import { convertHtmlText } from '../core/chinese';
 import type { LoadedBook, ReaderSettings } from '../core/types';
-import { shelf } from '../ui/theme';
+import { shelf, paperColors } from '../ui/theme';
 import { loadConverter, loadReaderHtml } from './assets';
+
+export type ReaderInsets = { top: number; right: number; bottom: number; left: number };
 
 export type ReaderProgress = {
   chapterIndex: number;
@@ -23,6 +25,7 @@ type Props = {
   initialPage: number;
   seekNonce: number;
   seekProgress: number | null;
+  insets: ReaderInsets;
   onProgress: (progress: ReaderProgress) => void;
   onChrome: () => void;
   onCover: (dataUrl: string) => void;
@@ -49,6 +52,7 @@ export function ReaderPane({
   initialPage,
   seekNonce,
   seekProgress,
+  insets,
   onProgress,
   onChrome,
   onCover,
@@ -63,6 +67,8 @@ export function ReaderPane({
   settingsRef.current = settings;
   const bookRef = useRef(book);
   bookRef.current = book;
+  const insetsRef = useRef(insets);
+  insetsRef.current = insets;
 
   useEffect(() => {
     let cancelled = false;
@@ -88,12 +94,14 @@ export function ReaderPane({
   const sendLoad = async () => {
     const current = bookRef.current;
     const currentSettings = settingsRef.current;
+    const frame = insetsRef.current;
     if (current.format === 'pdf' && current.pdfBytes) {
       const encoded = toBase64(current.pdfBytes);
       if (encoded.length > 1_400_000) {
         post({
           type: 'pdf-begin',
           settings: currentSettings,
+          insets: frame,
           position: { chapterIndex: initialChapter, pageIndex: initialPage },
         });
         const size = 180_000;
@@ -106,13 +114,14 @@ export function ReaderPane({
       post({
         type: 'load',
         settings: currentSettings,
+        insets: frame,
         position: { chapterIndex: 0, pageIndex: initialPage },
         book: { kind: 'pdf', pdfBase64: encoded },
       });
       return;
     }
     let chapters = current.chapters;
-    if (currentSettings.verticalTraditional) {
+    if (currentSettings.traditional && current.format !== 'pdf') {
       const convert = await loadConverter();
       chapters = chapters.map((chapter) => ({
         ...chapter,
@@ -123,6 +132,7 @@ export function ReaderPane({
     post({
       type: 'load',
       settings: currentSettings,
+      insets: frame,
       position: { chapterIndex: initialChapter, pageIndex: initialPage },
       book: {
         kind: 'html',
@@ -140,12 +150,17 @@ export function ReaderPane({
     void sendLoad();
     // Reload when the book or the vertical mode changes the HTML itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, book, settings.verticalTraditional]);
+  }, [ready, book, settings.traditional]);
 
   useEffect(() => {
     if (!ready) return;
     post({ type: 'settings', settings });
   }, [ready, settings]);
+
+  useEffect(() => {
+    if (!ready) return;
+    post({ type: 'insets', ...insets });
+  }, [ready, insets.top, insets.right, insets.bottom, insets.left]);
 
   useEffect(() => {
     if (!ready || seekProgress == null || seekNonce === 0) return;
@@ -233,6 +248,9 @@ export function ReaderPane({
         domStorageEnabled
         scrollEnabled={false}
         bounces={false}
+        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior="never"
+        androidLayerType="hardware"
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
         setSupportMultipleWindows={false}
@@ -244,9 +262,8 @@ export function ReaderPane({
 }
 
 function paperColor(theme: string): string {
-  if (theme === 'dark') return '#1c1a17';
-  if (theme === 'light') return '#fbfbf8';
-  return '#f4ecd8';
+  if (theme === 'dark' || theme === 'light' || theme === 'sepia') return paperColors(theme).paper;
+  return paperColors('sepia').paper;
 }
 
 const styles = StyleSheet.create({
