@@ -89,7 +89,7 @@ export function sniffFormat(fileName: string, bytes: Uint8Array): 'pdf' | 'epub'
   }
   if (ext === 'pdf') return 'pdf';
   if (ext === 'epub') return 'epub';
-  if (ext === 'azw3' || ext === 'kf8' || ext === 'mobi') return 'azw3';
+  if (ext === 'azw3' || ext === 'kf8' || ext === 'mobi' || ext === 'azw' || ext === 'prc') return 'azw3';
   if (bytes.length > 68 && ascii(bytes, 60, 8) === 'BOOKMOBI') return 'azw3';
   return null;
 }

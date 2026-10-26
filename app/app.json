@@ -13,7 +13,7 @@
       "bundleIdentifier": "com.fengyang.bookshelf",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocalNetworkUsageDescription": "BookShelf 只在你的局域网里接收 Windows 传来的书籍。请允许本地网络，否则无法 Wi-Fi 传书。",
+        "NSLocalNetworkUsageDescription": "BookShelf 需要本地网络，才能在家里的 Wi-Fi 上接收 Windows 传来的书。请点允许。若电脑搜不到手机，打开「设置 → 隐私与安全性 → 本地网络」，打开 BookShelf。",
         "NSBonjourServices": ["_bookshelf._tcp"],
         "CFBundleDocumentTypes": [
           {
@@ -47,7 +47,7 @@
             "UTTypeDescription": "DRM-free AZW3 book",
             "UTTypeConformsTo": ["public.data"],
             "UTTypeTagSpecification": {
-              "public.filename-extension": ["azw3", "kf8"],
+              "public.filename-extension": ["azw3", "kf8", "azw", "mobi", "prc"],
               "public.mime-type": ["application/vnd.amazon.mobi8-ebook", "application/x-mobi8-ebook"]
             }
           }

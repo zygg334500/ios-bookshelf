@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import tempfile
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
 
 from bookpush.discovery import Device, browse
+from bookpush.kindle import prepare_book
 from bookpush.uploader import UploadError, upload_book
 
 
@@ -57,9 +59,16 @@ class BookPushApp:
         self.device_list.pack(fill="both", expand=True, pady=6)
         self.device_list.bind("<<ListboxSelect>>", self._use_selected)
         ttk.Button(left, text="重新搜索", command=self.search).pack(anchor="w")
-        self.search_note = ttk.Label(left, text="点「重新搜索」查找 _bookshelf._tcp", style="Hint.TLabel")
+        self.search_note = ttk.Label(
+            left,
+            text="正在搜索 _bookshelf._tcp。结果为 0 时，用下面的手工填写。",
+            style="Hint.TLabel",
+            wraplength=340,
+            justify="left",
+        )
         self.search_note.pack(anchor="w", pady=(6, 8))
 
+        ttk.Label(left, text="手工填写（搜索为 0 时）", style="Card.TLabel").pack(anchor="w")
         form = ttk.Frame(left, style="Card.TFrame")
         form.pack(fill="x")
         self.host = tk.StringVar()
@@ -85,7 +94,8 @@ class BookPushApp:
         self.status.pack(anchor="w")
         self.log = tk.Text(right, height=8, wrap="word", font=("Microsoft YaHei UI", 9), bg="#FBF7F0")
         self.log.pack(fill="both", expand=True, pady=(8, 0))
-        self._write("传书时请让手机上的 BookShelf 保持在前台，并允许本地网络。")
+        self._write("传书时请让手机停在「Wi-Fi 传书」，并允许本地网络。搜不到就填手机上的 IP、端口和配对码。")
+        self.search()
 
     def _field(self, parent: ttk.Frame, label: str, variable: tk.StringVar) -> None:
         ttk.Label(parent, text=label, style="Card.TLabel").pack(anchor="w", pady=(6, 0))
@@ -126,7 +136,10 @@ class BookPushApp:
     def pick_files(self) -> None:
         names = filedialog.askopenfilenames(
             title="选择书籍",
-            filetypes=[("书籍", "*.pdf *.epub *.azw3"), ("全部文件", "*.*")],
+            filetypes=[
+                ("书籍", "*.pdf *.epub *.azw3 *.azw *.mobi *.kf8 *.prc"),
+                ("全部文件", "*.*"),
+            ],
         )
         for name in names:
             path = Path(name)
@@ -160,18 +173,27 @@ class BookPushApp:
 
         def work() -> None:
             total = len(files)
-            for index, path in enumerate(files):
-                def on_progress(sent: int, size: int, index: int = index) -> None:
-                    overall = ((index + sent / max(size, 1)) / total) * 100
-                    self.root.after(0, lambda value=overall: self.progress.configure(value=value))
+            with tempfile.TemporaryDirectory() as temp:
+                work_dir = Path(temp)
+                for index, path in enumerate(files):
+                    def on_progress(sent: int, size: int, index: int = index) -> None:
+                        overall = ((index + sent / max(size, 1)) / total) * 100
+                        self.root.after(0, lambda value=overall: self.progress.configure(value=value))
 
-                try:
-                    result = upload_book(host, port, path, pin, on_progress=on_progress)
-                except UploadError as error:
-                    self.root.after(0, lambda message=str(error), name=path.name: self._fail(name, message))
-                    return
-                title = result.get("title") or path.stem
-                self.root.after(0, lambda title=title: self._write(f"已送到手机：《{title}》"))
+                    try:
+                        prepared = prepare_book(path, work_dir)
+                    except UploadError as error:
+                        self.root.after(0, lambda message=str(error), name=path.name: self._fail(name, message))
+                        return
+                    if prepared.note:
+                        self.root.after(0, lambda note=prepared.note: self._write(note))
+                    try:
+                        result = upload_book(host, port, prepared.path, pin, on_progress=on_progress)
+                    except UploadError as error:
+                        self.root.after(0, lambda message=str(error), name=path.name: self._fail(name, message))
+                        return
+                    title = result.get("title") or path.stem
+                    self.root.after(0, lambda title=title: self._write(f"已送到手机：《{title}》"))
             self.root.after(0, lambda: self.status.configure(text="全部发送完成。"))
             self.root.after(0, lambda: self.progress.configure(value=100))
 

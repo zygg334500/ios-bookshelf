@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { forgetBookmarks, parseBookmarks, toggleBookmark, type Bookmark } from '../core/bookmarks';
 import { createId } from '../core/progress';
 import { inspectBook } from '../core/inspect';
 import {
@@ -34,6 +35,8 @@ type LibraryContextValue = {
   updateSettings: (next: ReaderSettings) => Promise<void>;
   updateDeviceName: (name: string) => Promise<void>;
   regeneratePin: () => Promise<void>;
+  bookmarks: Record<string, Bookmark[]>;
+  toggleBookmark: (bookId: string, mark: Omit<Bookmark, 'id' | 'createdAt'>) => Promise<boolean>;
 };
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
@@ -53,6 +56,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<ReaderSettings>(defaultReaderSettings);
   const [pin, setPin] = useState('0000');
   const [deviceName, setDeviceName] = useState('书房');
+  const [bookmarks, setBookmarks] = useState<Record<string, Bookmark[]>>({});
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,10 +77,12 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         }
         const name = (await opened.getSetting('deviceName')) || '书房';
         const rawSettings = await opened.getSetting('reader');
+        const rawBookmarks = await opened.getSetting('bookmarks');
         if (!cancelled) {
           setStore(opened);
           setPin(nextPin);
           setDeviceName(name);
+          setBookmarks(parseBookmarks(rawBookmarks));
           if (rawSettings) {
             try {
               setSettings({ ...defaultReaderSettings, ...JSON.parse(rawSettings) });
@@ -148,6 +154,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (!store) return;
       await store.remove(id);
       await deleteBookFiles(id);
+      setBookmarks((current) => {
+        const next = forgetBookmarks(current, id);
+        void store.setSetting('bookmarks', JSON.stringify(next));
+        return next;
+      });
       await refresh();
     },
     [refresh, store],
@@ -215,6 +226,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [store],
   );
 
+  const toggleBookmarkFor = useCallback(
+    async (bookId: string, mark: Omit<Bookmark, 'id' | 'createdAt'>) => {
+      const next = toggleBookmark(bookmarks, bookId, { ...mark, id: createId(), createdAt: Date.now() });
+      setBookmarks(next.all);
+      await store?.setSetting('bookmarks', JSON.stringify(next.all));
+      return next.added;
+    },
+    [bookmarks, store],
+  );
+
   const regeneratePin = useCallback(async () => {
     const next = String(1000 + Math.floor(Math.random() * 9000));
     setPin(next);
@@ -242,8 +263,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       updateSettings,
       updateDeviceName,
       regeneratePin,
+      bookmarks,
+      toggleBookmark: toggleBookmarkFor,
     }),
     [
+      bookmarks,
       books,
       deviceName,
       error,
@@ -258,6 +282,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       saveCover,
       savePosition,
       settings,
+      toggleBookmarkFor,
       updateDeviceName,
       updateSettings,
     ],

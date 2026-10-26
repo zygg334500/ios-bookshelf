@@ -31,6 +31,6 @@ export async function inspectBook(fileName: string, bytes: Uint8Array): Promise<
     return parseAzw3(bytes);
   } catch (error) {
     if (error instanceof BookError) throw error;
-    throw new BookError('FORMAT', 'AZW3 解析失败。若文件带 DRM，BookShelf 不会打开它。');
+    throw new BookError('FORMAT', '这本 AZW3 无法解析。BookShelf 只读取无 DRM 的文件，不会尝试解除保护。');
   }
 }

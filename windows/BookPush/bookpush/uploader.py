@@ -100,7 +100,7 @@ def upload_book(
 def explain_network(error: OSError) -> str:
     text = str(error)
     return (
-        "连不上手机。请确认 iPhone 上的 BookShelf 停在前台、配对码一致，"
-        "并且两台设备在同一个 Wi-Fi。若 Windows 防火墙弹出询问，请允许 Python 访问专用网络。"
+        "连不上手机。请确认 iPhone 停在「Wi-Fi 传书」、IP 和端口与屏幕一致、配对码一致，"
+        "并且两台设备在同一个 Wi-Fi。搜索为 0 时改用手工填写。若防火墙询问，请允许 Python 访问专用网络。"
         f"（{text}）"
     )

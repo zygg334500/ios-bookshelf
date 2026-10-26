@@ -39,11 +39,17 @@ export default function LibraryScreen() {
     if (result.canceled) return;
     setBusy(true);
     try {
+      let azw3Count = 0;
       for (const asset of result.assets) {
         const bytes = await readPicked(asset);
-        await library.importBytes(asset.name, bytes);
+        const imported = await library.importBytes(asset.name, bytes);
+        if (imported.format === 'azw3') azw3Count += 1;
       }
-      setMessage(`已放入 ${result.assets.length} 本。`);
+      setMessage(
+        azw3Count > 0
+          ? `已放入 ${result.assets.length} 本。其中 ${azw3Count} 本无 DRM 的 AZW3 可以打开阅读。`
+          : `已放入 ${result.assets.length} 本。`,
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '导入失败。');
     } finally {
@@ -59,7 +65,7 @@ export default function LibraryScreen() {
         const bytes = await readAssetBytes(sample.moduleId);
         await library.importBytes(sample.name, bytes);
       }
-      setMessage('四本示例已经放上书架。它们都是仓库里的原创短篇，没有版权书。');
+      setMessage('四本示例已经放上书架，包含一本无 DRM 的 AZW3。它们都是仓库里的原创短篇，没有版权书。');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '示例导入失败。');
     } finally {
