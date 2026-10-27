@@ -171,10 +171,35 @@ def palm_encryption(data: bytes) -> int | None:
     return worst if seen else None
 
 
+# Windows cloud-file codes. A PalmDB whose name begins with CR! is still AZW3
+# when BOOKMOBI sits at offset 60; those codes are only for online-only reads.
+_CLOUD_WINERRORS = frozenset(range(358, 369)) | frozenset(range(377, 399))
+
+CLOUD_PLACEHOLDER_MESSAGE = (
+    "这个文件还在 OneDrive 云端，电脑上只有占位符，读不到正文。"
+    "请在资源管理器里右键该文件，选择「始终保留在此设备上」，等下载完成后再传。"
+    "原文件继续留在云端，BookPush 不会改它。"
+)
+
+
 def is_kfx(data: bytes) -> bool:
+    """KFX containers start with CR!, CONT, or SQLite. Amazon AZW3 often uses a CR! PalmDB name and is not KFX."""
+    if len(data) >= 68 and data[60:68] == b"BOOKMOBI":
+        return False
     if data.startswith(b"CR!") or data.startswith(b"SQLite format 3") or data.startswith(b"CONT"):
         return True
     return False
+
+
+def explain_read_error(error: OSError) -> str:
+    """Chinese hint when Windows only has an online OneDrive placeholder."""
+    winerror = getattr(error, "winerror", None)
+    text = str(error).lower()
+    if winerror in _CLOUD_WINERRORS or any(
+        token in text for token in ("cloud file", "cloud operation", "onedrive", "placeholder")
+    ):
+        return CLOUD_PLACEHOLDER_MESSAGE
+    return f"读不到文件：{error}"
 
 
 def refuse_protected(data: bytes) -> None:

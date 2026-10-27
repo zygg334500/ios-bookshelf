@@ -17,7 +17,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from bookpush.kindle import DRM_MESSAGE, KFX_MESSAGE, is_kfx, palm_encryption
+from bookpush.kindle import DRM_MESSAGE, KFX_MESSAGE, explain_read_error, is_kfx, palm_encryption
 
 
 class FastDrm(Exception):
@@ -78,6 +78,8 @@ def fast_convert_path(path_str: str) -> dict:
         return {"status": "kfx", "message": str(error), "epub": b"", "title": ""}
     except FastFallback as error:
         return {"status": "fallback", "message": str(error), "epub": b"", "title": ""}
+    except OSError as error:
+        return {"status": "read", "message": explain_read_error(error), "epub": b"", "title": ""}
     except Exception as error:
         return {"status": "fallback", "message": f"本机转换没有完成：{error}", "epub": b"", "title": ""}
     return {"status": "ok", "message": "", "epub": epub, "title": book.title}

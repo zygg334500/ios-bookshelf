@@ -246,6 +246,35 @@ class BatchConvertTests(unittest.TestCase):
             self.assertTrue(items[2].ok)
             self.assertEqual(items[2].output, pdf)
 
+    def test_onedrive_placeholder_skips_with_chinese_keep_message(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            source = directory / "online.azw3"
+            source.write_bytes(b"not-read")
+            tool = directory / "ebook-convert"
+            _write_script(tool, "#!/bin/sh\necho ran > \"$0.ran\"\nexit 1\n")
+            cloud = OSError(22, "The cloud file provider is not running")
+            cloud.winerror = 362
+            real_read = Path.read_bytes
+
+            def read_bytes(self: Path) -> bytes:
+                if self == source:
+                    raise cloud
+                return real_read(self)
+
+            with mock.patch.object(Path, "read_bytes", read_bytes):
+                items = convert_batch(
+                    [source],
+                    cache_dir=directory / "cache",
+                    work_dir=directory / "work",
+                    converter=tool,
+                    search=False,
+                )
+            self.assertFalse(items[0].ok)
+            self.assertIn("始终保留在此设备上", items[0].detail)
+            self.assertIn("OneDrive", items[0].detail)
+            self.assertFalse((directory / "ebook-convert.ran").exists())
+
     def test_missing_calibre_message(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)

@@ -6,7 +6,16 @@ from pathlib import Path
 import os
 from unittest import mock
 
-from bookpush.kindle import DRM_MESSAGE, KFX_MESSAGE, WINDOWS_CALIBRE2, converter_search_order, prepare_book
+from bookpush.kindle import (
+    CLOUD_PLACEHOLDER_MESSAGE,
+    DRM_MESSAGE,
+    KFX_MESSAGE,
+    WINDOWS_CALIBRE2,
+    converter_search_order,
+    explain_read_error,
+    is_kfx,
+    prepare_book,
+)
 from bookpush.uploader import UploadError
 
 
@@ -54,6 +63,44 @@ class KindlePrepareTests(unittest.TestCase):
             self.assertEqual(str(kfx_error.exception), KFX_MESSAGE)
             self.assertNotIn("受数字版权保护", KFX_MESSAGE)
             self.assertNotIn("破解", KFX_MESSAGE)
+
+    def test_bookmobi_with_cr_name_is_not_kfx_and_reaches_calibre(self) -> None:
+        palm = bytearray(_palm(0, "窗下".encode()))
+        palm[0:3] = b"CR!"
+        self.assertEqual(bytes(palm[60:68]), b"BOOKMOBI")
+        self.assertFalse(is_kfx(bytes(palm)))
+        self.assertTrue(is_kfx(b"CR!not-a-palm-database"))
+        self.assertTrue(is_kfx(b"CONT"))
+        sqlite = bytearray(b"SQLite format 3" + b"\x00" * 70)
+        sqlite[60:68] = b"BOOKMOBI"
+        self.assertFalse(is_kfx(bytes(sqlite)))
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            source = directory / "amazon.azw3"
+            source.write_bytes(bytes(palm))
+            tool = directory / "ebook-convert"
+            tool.write_text(
+                "#!/usr/bin/env python3\n"
+                "import pathlib, sys\n"
+                "pathlib.Path(sys.argv[2]).write_bytes(b'EPUB')\n"
+                "pathlib.Path(sys.argv[2] + '.ran').write_text('yes')\n",
+                encoding="utf-8",
+            )
+            tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+            prepared = prepare_book(source, directory, tool, search=False)
+            self.assertEqual(prepared.path.read_bytes(), b"EPUB")
+            self.assertTrue((directory / "amazon.epub.ran").exists())
+            self.assertNotIn("KFX", prepared.note or "")
+
+    def test_onedrive_placeholder_asks_to_keep_the_file_on_this_pc(self) -> None:
+        cloud = OSError(22, "The cloud operation was unsuccessful")
+        cloud.winerror = 395
+        self.assertEqual(explain_read_error(cloud), CLOUD_PLACEHOLDER_MESSAGE)
+        self.assertIn("始终保留在此设备上", CLOUD_PLACEHOLDER_MESSAGE)
+        self.assertIn("OneDrive", CLOUD_PLACEHOLDER_MESSAGE)
+        missing = FileNotFoundError(2, "No such file or directory")
+        self.assertIn("读不到文件", explain_read_error(missing))
+        self.assertNotIn("OneDrive", explain_read_error(missing))
 
     def test_unprotected_uses_converter_without_drm_flags(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
