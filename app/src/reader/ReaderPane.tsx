@@ -206,17 +206,19 @@ export function ReaderPane({
     }
   };
 
+  const paper = paperColor(settings.theme);
+
   if (!html) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={shelf.accent} />
+      <View style={[styles.loading, { backgroundColor: paper }]}>
+        <ActivityIndicator color={paperColors(settings.theme).ink} />
       </View>
     );
   }
 
   if (Platform.OS === 'web') {
     return (
-      <View style={styles.fill}>
+      <View style={[styles.fill, { backgroundColor: paper }]}>
         <iframe
           ref={frameRef}
           title="reader"
@@ -226,14 +228,14 @@ export function ReaderPane({
             setReady(false);
             frameRef.current?.contentWindow?.postMessage(JSON.stringify({ type: 'hello' }), '*');
           }}
-          style={{ border: 'none', width: '100%', height: '100%', background: 'transparent' }}
+          style={{ border: 'none', width: '100%', height: '100%', background: paper }}
         />
       </View>
     );
   }
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, { backgroundColor: paper }]}>
       <WebView<{ marker?: true }>
         ref={webRef}
         originWhitelist={['*']}
@@ -255,7 +257,8 @@ export function ReaderPane({
         showsHorizontalScrollIndicator={false}
         setSupportMultipleWindows={false}
         textInteractionEnabled={false}
-        style={[styles.web, { backgroundColor: paperColor(settings.theme) }]}
+        style={styles.web}
+        containerStyle={{ flex: 1, backgroundColor: paper }}
       />
     </View>
   );

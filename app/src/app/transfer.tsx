@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '../storage/library';
 import { getTransferSnapshot, restartTransfer, subscribeTransfer, type TransferSnapshot } from '../transfer/server';
+import { Frosted, LinenWash } from '../ui/glass';
 import { QrCode } from '../ui/QrCode';
 import { shelfContentPadding } from '../ui/insets';
 import { fonts, shelf } from '../ui/theme';
@@ -22,12 +23,14 @@ export default function TransferScreen() {
   const address = status.ip && status.port ? `http://${status.ip}:${status.port}` : '';
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentInsetAdjustmentBehavior="never"
-      contentContainerStyle={{ ...shelfContentPadding(insets), paddingBottom: insets.bottom + 28 }}
-    >
-      <Pressable onPress={() => router.back()}>
+    <View style={styles.screen}>
+      <LinenWash />
+      <ScrollView
+        style={styles.scroll}
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={{ ...shelfContentPadding(insets), paddingBottom: insets.bottom + 28 }}
+      >
+      <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
         <Text style={styles.back}>返回书架</Text>
       </Pressable>
       <Text style={styles.kicker}>LOCAL NETWORK</Text>
@@ -36,7 +39,7 @@ export default function TransferScreen() {
         搜索失败时不必重装。下面的 IP、端口和配对码就是手动通道，BookPush 搜到 0 台时直接填这三项。
       </Text>
 
-      <View style={styles.card}>
+      <Frosted tone="shelf" intensity={64} wash={0.4} radius={24} style={styles.card}>
         <Text style={styles.label}>这台设备</Text>
         <TextInput
           value={name}
@@ -50,9 +53,9 @@ export default function TransferScreen() {
         <Pressable onPress={() => void library.regeneratePin()}>
           <Text style={styles.link}>换一个配对码</Text>
         </Pressable>
-      </View>
+      </Frosted>
 
-      <View style={styles.card}>
+      <Frosted tone="shelf" intensity={64} wash={0.4} radius={24} style={styles.card}>
         <Text style={styles.label}>手工填写</Text>
         <Text style={styles.fieldLabel}>IP</Text>
         <Text selectable style={styles.address}>{status.ip ?? '装进 iPhone 并连上 Wi-Fi 后出现'}</Text>
@@ -73,17 +76,17 @@ export default function TransferScreen() {
           <Text style={styles.buttonText}>重新监听</Text>
         </Pressable>
         {status.lastTitle ? <Text style={styles.body}>最近收到《{status.lastTitle}》</Text> : null}
-      </View>
+      </Frosted>
 
-      <View style={styles.card}>
+      <Frosted tone="shelf" intensity={64} wash={0.4} radius={24} style={styles.card}>
         <Text style={styles.label}>搜不到手机时</Text>
         <Text style={styles.body}>1. 第一次会弹出「本地网络」。若之前点了不允许：设置 → 隐私与安全性 → 本地网络 → 打开 BookShelf。</Text>
         <Text style={styles.body}>2. 手机和电脑连同一个家里的 Wi-Fi，不要用访客网络，两边关掉 VPN。这一页留在前台。</Text>
         <Text style={styles.body}>3. Windows 防火墙允许 Python 在专用网络收发 UDP 5353。BookPush 点「重新搜索」。</Text>
         <Text style={styles.body}>4. 仍然是 0 台：把 IP、端口、配对码填进 BookPush，再传书。</Text>
-      </View>
+      </Frosted>
 
-      <View style={styles.card}>
+      <Frosted tone="shelf" intensity={64} wash={0.4} radius={24} style={styles.card}>
         <Text style={styles.label}>不用 Wi-Fi 时</Text>
         <Text style={styles.body}>
           用数据线连接电脑，在 Windows 的 Apple 设备 / iTunes 文件共享里把 PDF、EPUB、AZW3 放进 BookShelf 文稿，然后点下面的按钮。
@@ -101,18 +104,32 @@ export default function TransferScreen() {
           <Text style={styles.buttonText}>扫描文件共享</Text>
         </Pressable>
         {scanNote ? <Text style={styles.hint}>{scanNote}</Text> : null}
-      </View>
-    </ScrollView>
+      </Frosted>
+      </ScrollView>
+      {insets.top > 0 ? <Frosted tone="shelf" intensity={80} wash={0.48} style={[styles.edgeGlass, { top: 0, height: insets.top }]} /> : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: shelf.bg },
-  back: { color: shelf.accent, fontFamily: fonts.ui, marginBottom: 12 },
-  kicker: { color: shelf.muted, letterSpacing: 2, fontSize: 11, fontFamily: fonts.ui },
-  title: { fontFamily: fonts.display, fontSize: 40, color: shelf.ink, marginTop: 4 },
-  sub: { fontFamily: fonts.ui, color: shelf.muted, lineHeight: 22, marginTop: 8, marginBottom: 16 },
-  card: { backgroundColor: shelf.card, borderRadius: 18, padding: 16, marginBottom: 12, gap: 6 },
+  scroll: { flex: 1, backgroundColor: 'transparent' },
+  edgeGlass: { position: 'absolute', left: 0, right: 0 },
+  backButton: { alignSelf: 'flex-start', marginBottom: 12 },
+  back: { color: shelf.accent, fontFamily: fonts.ui, fontSize: 16, fontWeight: '600' },
+  kicker: { color: shelf.muted, letterSpacing: 2.2, fontSize: 11, fontFamily: fonts.ui, fontWeight: '600' },
+  title: { fontFamily: fonts.ui, fontSize: 34, lineHeight: 40, fontWeight: '700', color: shelf.ink, marginTop: 4, letterSpacing: -0.4 },
+  sub: { fontFamily: fonts.ui, color: shelf.muted, lineHeight: 22, marginTop: 8, marginBottom: 16, fontSize: 15 },
+  card: {
+    padding: 16,
+    marginBottom: 12,
+    gap: 6,
+    shadowColor: '#3c2814',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
   label: { fontFamily: fonts.ui, color: shelf.muted, fontSize: 12, letterSpacing: 1 },
   input: {
     fontFamily: fonts.display,
@@ -139,5 +156,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  buttonText: { color: shelf.card, fontFamily: fonts.ui },
+  buttonText: { color: shelf.accentInk, fontFamily: fonts.ui, fontWeight: '600' },
 });

@@ -42,7 +42,13 @@ Calibre 本体是 GPL-3.0，转换插件还依赖它自带的 Python 和二进�
 
 横排时向左滑是下一页，点右侧约 22% 也是下一页。竖排（`writing-mode: vertical-rl`，书脊在右）时向左滑、或点左侧，是下一页。点中间收起或唤出菜单。
 
-WebView 关掉了系统自动安全区（`contentInsetAdjustmentBehavior="never"`）。页边由页面自己留：顶部是安全区再加 36pt，给灵动岛和一行菜单；底部是安全区再加页码。iPhone 16e 竖屏大约是顶 59、底 34。不再把整段安全区叠两次，避免顶栏悬得太高。
+WebView 关掉了系统自动安全区（`contentInsetAdjustmentBehavior="never"`）。页边由页面自己留。iPhone 16e 竖屏安全区大约是顶 59、底 34、左右 0。正文再让出顶栏 46pt、底栏 72pt（`READER_CHROME_TOP` / `READER_CHROME_BOTTOM`，阅读器里的 `--chrome-top` / `--chrome-bottom`），毛玻璃落在这段空白里，不压住字形。左右是可调边距，默认 22。菜单打开或收起都不改 WebView 尺寸，所以不会重排。不再把整段安全区叠两次。
+
+中文段落首行缩进 2 字，段距大约 0.35em；英文段落只留段距、不缩进。字距、`line-break: strict`、两端对齐（`inter-ideograph`）跟系统字体走。竖排仍是 `writing-mode: vertical-rl` 加 `text-orientation: mixed`，系统字体在竖排时用宋体。简转繁时页面语言是 `zh-Hant`，字体栈把苹方 / 宋体的繁体面放在前面。出版社 CSS 里的字号、行距、颜色和漂浮会被阅读器盖住，EPUB 和 AZW3 转出来的 EPUB 用同一套墨色。
+
+翻页静止时清掉 `translate3d` 和 `will-change`，避免合成层把笔画磨糊；只有手指拖动时才做整像素位移。打开书时先铺与主题一致的纸色，正文再淡入，避免白屏闪一下。PDF 按 `devicePixelRatio`（最高 3）画到 canvas。
+
+书架、传书页和阅读菜单用 `expo-blur` 的系统材质。阅读顶栏和底栏是较透的超薄材质，深色主题用深色材质。书架格子本身不加 BlurView，避免列表滚动变卡。
 
 字体：
 

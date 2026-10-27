@@ -28,6 +28,7 @@ import {
 } from '../core/shelf';
 import { useLibrary, type ShelfBook } from '../storage/library';
 import { readAssetBytes } from '../reader/assets';
+import { Frosted, LinenWash } from '../ui/glass';
 import { shelfContentPadding } from '../ui/insets';
 import { bundledSamples } from '../ui/samples';
 import { clothColor, fonts, shelf } from '../ui/theme';
@@ -72,7 +73,15 @@ const BookCell = memo(function BookCell({
         <Text numberOfLines={1} style={styles.bookAuthor}>
           {book.author}
         </Text>
-        <Text style={[styles.status, status === 'finished' && styles.statusDone]}>{readingStatusLabel(status)}</Text>
+        <Text
+          style={[
+            styles.status,
+            status === 'reading' && styles.statusReading,
+            status === 'finished' && styles.statusDone,
+          ]}
+        >
+          {readingStatusLabel(status)}
+        </Text>
       </Pressable>
       {book.progress > 0.01 ? (
         <View style={styles.track}>
@@ -225,7 +234,8 @@ export default function LibraryScreen() {
   );
 
   const header = (
-    <View>
+    <View style={styles.headerShadow}>
+      <Frosted tone="shelf" intensity={68} wash={0.4} radius={28} style={styles.headerCard}>
       <View style={styles.header}>
         <View style={styles.seal}>
           <Text style={styles.sealText}>书</Text>
@@ -291,6 +301,7 @@ export default function LibraryScreen() {
           </View>
         </View>
       ) : null}
+      </Frosted>
     </View>
   );
 
@@ -300,22 +311,24 @@ export default function LibraryScreen() {
       <Text style={styles.emptyBody}>正在打开书架…</Text>
     </View>
   ) : library.ready && library.books.length === 0 ? (
-    <View style={styles.empty}>
+    <Frosted tone="shelf" intensity={62} wash={0.42} radius={24} style={styles.empty}>
       <Text style={styles.emptyTitle}>还没有书</Text>
       <Text style={styles.emptyBody}>
         可以从这台设备导入，也可以先放入内置示例，看看翻页、字体和竖排。装到 iPhone 之后，用 Windows 的 BookPush 经家里的 Wi-Fi 把书送进来。
       </Text>
-    </View>
+    </Frosted>
   ) : library.ready ? (
-    <View style={styles.empty}>
+    <Frosted tone="shelf" intensity={62} wash={0.42} radius={24} style={styles.empty}>
       <Text style={styles.emptyTitle}>{statusFilter === 'all' ? '没有符合的书' : `没有${readingStatusLabel(statusFilter)}的书`}</Text>
       <Text style={styles.emptyBody}>换一个书名、作者、文件名或阅读状态再看。架子上的书还在。</Text>
-    </View>
+    </Frosted>
   ) : undefined;
 
   return (
-    <FlatList
-      style={styles.screen}
+    <View style={styles.screen}>
+      <LinenWash />
+      <FlatList
+      style={styles.list}
       data={library.ready ? visibleBooks : []}
       key={columns}
       keyExtractor={(book) => book.id}
@@ -334,6 +347,11 @@ export default function LibraryScreen() {
       updateCellsBatchingPeriod={50}
       extraData={pendingDelete}
     />
+      {insets.top > 0 ? <Frosted tone="shelf" intensity={80} wash={0.48} style={[styles.edgeGlass, { top: 0, height: insets.top }]} /> : null}
+      {insets.bottom > 0 ? (
+        <Frosted tone="shelf" intensity={72} wash={0.42} style={[styles.edgeGlass, { bottom: 0, height: insets.bottom }]} />
+      ) : null}
+    </View>
   );
 }
 
@@ -354,77 +372,108 @@ async function readPicked(asset: DocumentPicker.DocumentPickerAsset): Promise<Ui
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: shelf.bg },
-  header: { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 18 },
+  list: { flex: 1, backgroundColor: 'transparent' },
+  edgeGlass: { position: 'absolute', left: 0, right: 0 },
+  headerShadow: {
+    marginBottom: 20,
+    borderRadius: 28,
+    shadowColor: '#3c2814',
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  headerCard: { padding: 16 },
+  header: { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 16 },
   seal: {
-    width: 54,
-    height: 54,
-    borderRadius: 8,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: shelf.accent,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#5c241f',
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   sealText: { color: shelf.accentInk, fontFamily: fonts.display, fontSize: 28 },
-  kicker: { color: shelf.muted, letterSpacing: 2, fontSize: 11, fontFamily: fonts.ui },
-  title: { color: shelf.ink, fontFamily: fonts.display, fontSize: 40, lineHeight: 46 },
-  sub: { color: shelf.muted, fontFamily: fonts.ui, marginTop: 2, lineHeight: 20 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  primary: { backgroundColor: shelf.ink, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
-  primaryText: { color: shelf.card, fontFamily: fonts.ui, fontSize: 15 },
+  kicker: { color: shelf.muted, letterSpacing: 2.2, fontSize: 11, fontFamily: fonts.ui, fontWeight: '600' },
+  title: { color: shelf.ink, fontFamily: fonts.ui, fontSize: 34, lineHeight: 40, fontWeight: '700', letterSpacing: -0.4 },
+  sub: { color: shelf.muted, fontFamily: fonts.ui, marginTop: 2, lineHeight: 20, fontSize: 14 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  primary: { backgroundColor: shelf.ink, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14 },
+  primaryText: { color: shelf.accentInk, fontFamily: fonts.ui, fontSize: 15, fontWeight: '600' },
   secondary: {
-    borderWidth: 1,
-    borderColor: shelf.line,
-    backgroundColor: shelf.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(60,40,20,0.16)',
+    backgroundColor: 'rgba(255,252,247,0.55)',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: 14,
   },
-  secondaryText: { color: shelf.ink, fontFamily: fonts.ui, fontSize: 15 },
-  message: { color: shelf.ink, fontFamily: fonts.ui, marginBottom: 12, lineHeight: 22 },
-  searchBlock: { marginBottom: 14, gap: 8 },
+  secondaryText: { color: shelf.ink, fontFamily: fonts.ui, fontSize: 15, fontWeight: '500' },
+  message: { color: shelf.ink, fontFamily: fonts.ui, marginBottom: 8, lineHeight: 22 },
+  searchBlock: { gap: 8 },
   search: {
-    backgroundColor: shelf.card,
+    backgroundColor: 'rgba(255,252,247,0.72)',
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontFamily: fonts.ui,
     fontSize: 16,
     color: shelf.ink,
   },
   sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  sortChip: { borderWidth: 1, borderColor: shelf.line, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: shelf.card },
-  sortChipOn: { borderColor: shelf.accent, backgroundColor: 'rgba(142,47,42,0.12)' },
-  sortText: { fontFamily: fonts.ui, color: shelf.ink, fontSize: 13 },
-  sortTextOn: { color: shelf.accent },
-  empty: {
-    backgroundColor: shelf.card,
-    borderRadius: 18,
-    padding: 22,
-    gap: 8,
-    marginTop: 8,
+  sortChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(60,40,20,0.14)',
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,252,247,0.45)',
   },
-  emptyTitle: { fontFamily: fonts.display, fontSize: 28, color: shelf.ink },
-  emptyBody: { fontFamily: fonts.ui, color: shelf.muted, lineHeight: 22 },
-  bookTitle: { marginTop: 8, color: shelf.ink, fontFamily: fonts.ui, fontSize: 14, lineHeight: 18 },
+  sortChipOn: { borderColor: shelf.accent, backgroundColor: 'rgba(142,59,52,0.12)' },
+  sortText: { fontFamily: fonts.ui, color: shelf.ink, fontSize: 13 },
+  sortTextOn: { color: shelf.accent, fontWeight: '600' },
+  empty: { padding: 22, gap: 8, marginTop: 8 },
+  emptyTitle: { fontFamily: fonts.ui, fontSize: 28, fontWeight: '700', color: shelf.ink },
+  emptyBody: { fontFamily: fonts.ui, color: shelf.muted, lineHeight: 22, fontSize: 15 },
+  bookTitle: { marginTop: 8, color: shelf.ink, fontFamily: fonts.ui, fontSize: 14, lineHeight: 18, fontWeight: '600' },
   bookAuthor: { color: shelf.muted, fontFamily: fonts.ui, fontSize: 12, marginTop: 2 },
-  status: { color: shelf.muted, fontFamily: fonts.ui, fontSize: 12, marginTop: 2 },
-  statusDone: { color: shelf.accent },
-  cardActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 4, marginTop: 4 },
+  status: {
+    alignSelf: 'flex-start',
+    color: shelf.muted,
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    marginTop: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,252,247,0.7)',
+  },
+  statusReading: { color: shelf.accent, backgroundColor: 'rgba(142,59,52,0.1)' },
+  statusDone: { color: '#2A4A3C', backgroundColor: 'rgba(42,74,60,0.1)' },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 4, marginTop: 6 },
   remove: { color: shelf.accent, fontFamily: fonts.ui, fontSize: 12 },
   removeArmed: { fontWeight: '700' },
-  track: { height: 3, backgroundColor: shelf.line, borderRadius: 99, marginTop: 6, overflow: 'hidden' },
+  track: { height: 3, backgroundColor: 'rgba(60,40,20,0.12)', borderRadius: 99, marginTop: 8, overflow: 'hidden' },
   fill: { height: 3, backgroundColor: shelf.accent },
   cover: {
-    borderRadius: 4,
+    borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: shelf.card,
-    shadowColor: '#3c2814',
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
+    backgroundColor: shelf.cardSolid,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(42,28,18,0.16)',
+    shadowColor: '#2a1c12',
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    elevation: 4,
   },
   cloth: { padding: 12, justifyContent: 'flex-end' },
-  spine: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 8, backgroundColor: 'rgba(0,0,0,0.25)' },
+  spine: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 9, backgroundColor: 'rgba(0,0,0,0.22)' },
   clothTitle: { color: '#F6EFE4', fontFamily: fonts.display, fontSize: 18, lineHeight: 24 },
   badge: {
     position: 'absolute',
@@ -433,10 +482,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,250,243,0.92)',
     color: shelf.ink,
     overflow: 'hidden',
+    borderRadius: 999,
     fontSize: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     fontFamily: fonts.ui,
+    fontWeight: '600',
   },
   badgeLight: { color: 'rgba(246,239,228,0.8)', fontSize: 10, marginTop: 10, letterSpacing: 1, fontFamily: fonts.ui },
 });
