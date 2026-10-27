@@ -67,10 +67,10 @@ function isCjk(text: string): boolean {
 }
 
 const MARGIN_CHOICES: { value: number; label: string }[] = [
-  { value: 12, label: '窄' },
-  { value: 22, label: '适中' },
-  { value: 34, label: '宽' },
-  { value: 46, label: '更宽' },
+  { value: 8, label: '窄' },
+  { value: 14, label: '适中' },
+  { value: 22, label: '宽' },
+  { value: 34, label: '更宽' },
 ];
 
 export default function ReadScreen() {
