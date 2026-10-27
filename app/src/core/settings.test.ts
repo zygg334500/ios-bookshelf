@@ -32,6 +32,9 @@ describe('reader settings', () => {
     expect(settings.fontSize).toBe(36);
     expect(settings.lineHeight).toBe(1.35);
     expect(settings.margin).toBe(8);
+    expect(defaultReaderSettings.margin).toBe(14);
+    expect(normalizeReaderSettings({}).margin).toBe(14);
+    expect(normalizeReaderSettings({ margin: 14 }).margin).toBe(14);
     expect(settings.align).toBe('justify');
     expect(settings.theme).toBe('sepia');
     expect(settings.brightness).toBe(1);

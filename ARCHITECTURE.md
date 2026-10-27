@@ -46,7 +46,7 @@ Calibre 本体是 GPL-3.0，转换插件还依赖它自带的 Python 和二进�
 
 横排时向左滑是下一页。竖排（`writing-mode: vertical-rl`，书脊在右）时向左滑、或点左侧，是下一页。点中间收起或唤出菜单。菜单用 `Animated` 且 `useNativeDriver: true`，WebView 尺寸在菜单开关时不变，避免每次重排。
 
-WebView 关掉了系统自动安全区（`contentInsetAdjustmentBehavior="never"`）。页边由页面自己留。iPhone 16e 竖屏安全区大约是顶 59、底 34、左右 0。正文再让出顶栏 46pt、底栏 72pt（`READER_CHROME_TOP` / `READER_CHROME_BOTTOM`，阅读器里的 `--chrome-top` / `--chrome-bottom`），毛玻璃落在这段空白里，不压住字形。左右是可调边距，默认 22。菜单打开或收起都不改 WebView 尺寸，所以不会重排。不再把整段安全区叠两次。
+WebView 关掉了系统自动安全区（`contentInsetAdjustmentBehavior="never"`）。页边由页面自己留。iPhone 16e 竖屏安全区大约是顶 59、底 34、左右 0。正文再让出顶栏 46pt、底栏 72pt（`READER_CHROME_TOP` / `READER_CHROME_BOTTOM`，阅读器里的 `--chrome-top` / `--chrome-bottom`），毛玻璃落在这段空白里，不压住字形。左右是同一套可调边距（再加安全区），默认 14。菜单打开或收起都不改 WebView 尺寸，所以不会重排。不再把整段安全区叠两次。
 
 中文段落首行缩进 2 字，段距大约 0.35em；英文段落只留段距、不缩进。字距、`line-break: strict`、两端对齐（`inter-ideograph`）跟系统字体走。竖排仍是 `writing-mode: vertical-rl` 加 `text-orientation: mixed`，系统字体在竖排时用宋体。简转繁时页面语言是 `zh-Hant`，字体栈把苹方 / 宋体的繁体面放在前面。出版社 CSS 里的字号、行距、颜色和漂浮会被阅读器盖住，EPUB 和 AZW3 转出来的 EPUB 用同一套墨色。
 

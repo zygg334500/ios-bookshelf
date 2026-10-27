@@ -72,7 +72,7 @@ export const defaultReaderSettings: ReaderSettings = {
   fontId: 'system',
   fontSize: 20,
   lineHeight: 1.7,
-  margin: 22,
+  margin: 14,
   align: 'justify',
   theme: 'sepia',
   vertical: false,

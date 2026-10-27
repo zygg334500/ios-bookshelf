@@ -25,7 +25,7 @@
     --fs: 20px;
     --lh: 1.7;
     --align: justify;
-    --margin: 22px;
+    --margin: 14px;
     --track: 0.02em;
     --safe-top: 0px;
     --safe-right: 0px;
@@ -322,7 +322,7 @@
       fontId: raw.fontId && FONTS[raw.fontId] ? raw.fontId : 'system',
       fontSize: Math.round(num(raw.fontSize, 14, 36, 20)),
       lineHeight: Math.round(num(raw.lineHeight, 1.35, 2.3, 1.7) * 100) / 100,
-      margin: Math.round(num(raw.margin, 8, 48, 22)),
+      margin: Math.round(num(raw.margin, 8, 48, 14)),
       align: align,
       theme: raw.theme && THEMES[raw.theme] ? raw.theme : 'sepia',
       vertical: typeof raw.vertical === 'boolean' ? raw.vertical : legacy,
