@@ -64,7 +64,7 @@ export type ReaderSettings = {
 export const defaultReaderSettings: ReaderSettings = {
   fontId: 'system',
   fontSize: 20,
-  lineHeight: 1.75,
+  lineHeight: 1.7,
   margin: 22,
   align: 'justify',
   theme: 'sepia',
