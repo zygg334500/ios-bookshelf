@@ -54,6 +54,9 @@ describe('reader engine', () => {
     expect(html).toContain('transition: none !important');
     expect(html).toContain('under.style.clipPath');
     expect(html).toContain("strip.className = 'strip gone'");
+    expect(html).toContain('var LOOKUP_MS = 460');
+    expect(html).toContain('caretRangeFromPoint');
+    expect(html).toContain("type: 'lookup'");
     expect(html).not.toContain('background: white');
     expect(html).not.toContain("backgroundColor = '#fff'");
     expect(html).not.toContain('backgroundColor = "white"');

@@ -32,7 +32,9 @@ Calibre 本体是 GPL-3.0，转换插件还依赖它自带的 Python 和二进�
 
 有 DRM 的文件在调用任何转换器之前就跳过，窗口用中文说明不会解除保护。Calibre 自己也因 DRM 失败时，同样跳过这一本，队列里的其他书继续。没装 Calibre、而快路径又转不了时，提示到 https://calibre-ebook.com/ 安装官方版本，并写明不要安装 DeDRM。
 
-简转繁只发生在打开阅读器、并且打开了「简转繁」的时候，和竖排无关。用的是 OpenCC 的 `STCharacters.txt` 与 `STPhrases.txt`，最长匹配。原文件不改。多义字取表里的第一项，所以「发」一类的字可能不是期望的那个。旧设置里的 `verticalTraditional: true` 会同时打开竖排和简转繁。
+文字转换只发生在阅读器里，和竖排无关，原文件不改。排版里可选原文、简体、繁体、古文。简体用 OpenCC 的 `TSCharacters.txt` 与 `TSPhrases.txt`（约 110KB），繁体用 `STCharacters.txt` 与 `STPhrases.txt`（约 1MB），都是最长匹配，词条优先于单字。古文在繁体表之后再套一层很小的 `ClassicalOverlay.txt`，避免「余」「云」被收成「餘」「雲」；更长的现代词仍走 OpenCC。多义字取表里的第一项，所以「发」一类的字可能不是期望的那个。旧设置里的 `verticalTraditional: true` 或 `traditional: true` 会打开繁体。
+
+长按正文一个字，阅读器取出附近几个字，交给本机词表 `classicalLexicon.ts` 做最长匹配，弹出白话释义。词表是短注，不是整部古汉语词典；同键的新条目可以盖过旧注。PDF 没有可选中的正文，不转换也不查词。查词不联网，也不读取账号。
 
 ## 翻页
 
@@ -61,7 +63,7 @@ WebView 关掉了系统自动安全区（`contentInsetAdjustmentBehavior="never"
 - 楷体：`Kaiti SC`
 - 圆体：`Yuanti SC`
 
-另外还有字号、行距、边距、对齐（左对齐 / 两端 / 居中）。主题是日间、羊皮纸、夜间。纸面亮度是盖在 WebView 上的半透明黑，不改系统亮度。竖排和简转繁分开。旧的 `verticalTraditional: true` 会同时打开这两项。
+另外还有字号、行距、边距、对齐（左对齐 / 两端 / 居中）。主题是日间、羊皮纸、夜间。纸面亮度是盖在 WebView 上的半透明黑，不改系统亮度。竖排和文字转换分开。排版浮层顶部单独放「完成」，不跟字号按钮排在一起，滚到下面时也能马上关掉。目录按书名、书签、章节分成层次，条目之间用细线隔开。旧的 `verticalTraditional: true` 会同时打开竖排和繁体。
 
 排版存在 settings 的 `reader` 里：`global` 是全部书籍，`books` 按书 id 覆盖。没有单独排版的书用全局。
 

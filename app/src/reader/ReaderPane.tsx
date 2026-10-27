@@ -5,7 +5,7 @@ import { toBase64 } from '../core/binary';
 import { convertHtmlText } from '../core/chinese';
 import type { LoadedBook, ReaderSettings } from '../core/types';
 import { shelf, paperColors } from '../ui/theme';
-import { loadConverter, loadReaderHtml } from './assets';
+import { loadReaderHtml, loadScriptConverter } from './assets';
 
 export type ReaderInsets = { top: number; right: number; bottom: number; left: number };
 
@@ -30,6 +30,7 @@ type Props = {
   onChrome: () => void;
   onCover: (dataUrl: string) => void;
   onError: (message: string) => void;
+  onLookup?: (hit: { text: string; index: number; x: number; y: number }) => void;
 };
 
 type OutMessage = {
@@ -43,6 +44,10 @@ type OutMessage = {
   chapterTitle?: string;
   dataUrl?: string;
   message?: string;
+  text?: string;
+  index?: number;
+  x?: number;
+  y?: number;
 };
 
 export function ReaderPane({
@@ -57,6 +62,7 @@ export function ReaderPane({
   onChrome,
   onCover,
   onError,
+  onLookup,
 }: Props) {
   const webRef = useRef<WebView<{ marker?: true }>>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -121,8 +127,9 @@ export function ReaderPane({
       return;
     }
     let chapters = current.chapters;
-    if (currentSettings.traditional && current.format !== 'pdf') {
-      const convert = await loadConverter();
+    const script = currentSettings.script ?? (currentSettings.traditional ? 'hant' : 'original');
+    if (script !== 'original' && current.format !== 'pdf') {
+      const convert = await loadScriptConverter(script);
       chapters = chapters.map((chapter) => ({
         ...chapter,
         title: convert(chapter.title),
@@ -150,7 +157,7 @@ export function ReaderPane({
     void sendLoad();
     // Reload when the book or the vertical mode changes the HTML itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, book, settings.traditional]);
+  }, [ready, book, settings.script, settings.traditional]);
 
   useEffect(() => {
     if (!ready) return;
@@ -175,7 +182,7 @@ export function ReaderPane({
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [onChrome, onCover, onError, onProgress]);
+  }, [onChrome, onCover, onError, onLookup, onProgress]);
 
   const handleRaw = (raw: string) => {
     let message: OutMessage;
@@ -203,6 +210,13 @@ export function ReaderPane({
       onCover(message.dataUrl);
     } else if (message.type === 'error' && message.message) {
       onError(message.message);
+    } else if (message.type === 'lookup' && typeof message.text === 'string') {
+      onLookup?.({
+        text: message.text,
+        index: message.index ?? 0,
+        x: message.x ?? 0,
+        y: message.y ?? 0,
+      });
     }
   };
 
