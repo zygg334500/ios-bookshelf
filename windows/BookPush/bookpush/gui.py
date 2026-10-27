@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, font as tkfont, ttk
 
 from bookpush.discovery import Device, browse
 from bookpush.kindle import (
@@ -14,7 +14,26 @@ from bookpush.kindle import (
     load_converter_pref,
     save_converter_pref,
 )
-from bookpush.queue import PushQueue, TransferProgress, describe_batch, push_batch
+from bookpush.queue import PushOutcome, PushQueue, TransferProgress, describe_batch, push_queue
+
+
+def _chinese_font(size: int) -> tuple[str, int]:
+    """Prefer Windows YaHei, then any installed face that can draw the Chinese UI."""
+    try:
+        families = set(tkfont.families())
+    except tk.TclError:
+        families = set()
+    for name in (
+        "Microsoft YaHei UI",
+        "Microsoft YaHei",
+        "WenQuanYi Micro Hei",
+        "Noto Sans CJK SC",
+        "Source Han Sans SC",
+        "Droid Sans Fallback",
+    ):
+        if name in families:
+            return (name, size)
+    return ("TkDefaultFont", size)
 
 
 class BookPushApp:
@@ -35,13 +54,15 @@ class BookPushApp:
             style.theme_use("clam")
         except tk.TclError:
             pass
+        ui = _chinese_font(10)
+        hint = _chinese_font(9)
         style.configure("TFrame", background="#E6DDD0")
         style.configure("Card.TFrame", background="#F7F1E7")
-        style.configure("TLabel", background="#E6DDD0", foreground="#1E1A16", font=("Microsoft YaHei UI", 10))
-        style.configure("Card.TLabel", background="#F7F1E7", foreground="#1E1A16", font=("Microsoft YaHei UI", 10))
+        style.configure("TLabel", background="#E6DDD0", foreground="#1E1A16", font=ui)
+        style.configure("Card.TLabel", background="#F7F1E7", foreground="#1E1A16", font=ui)
         style.configure("Title.TLabel", background="#E6DDD0", font=("Georgia", 26))
-        style.configure("Hint.TLabel", background="#F7F1E7", foreground="#6F6256", font=("Microsoft YaHei UI", 9))
-        style.configure("TButton", font=("Microsoft YaHei UI", 10))
+        style.configure("Hint.TLabel", background="#F7F1E7", foreground="#6F6256", font=hint)
+        style.configure("TButton", font=ui)
 
         outer = ttk.Frame(self.root, padding=18)
         outer.pack(fill="both", expand=True)
@@ -60,7 +81,7 @@ class BookPushApp:
         left = ttk.Frame(body, style="Card.TFrame", padding=12)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         ttk.Label(left, text="手机", style="Card.TLabel").pack(anchor="w")
-        self.device_list = tk.Listbox(left, height=8, activestyle="dotbox", font=("Microsoft YaHei UI", 10))
+        self.device_list = tk.Listbox(left, height=8, activestyle="dotbox", font=ui)
         self.device_list.pack(fill="both", expand=True, pady=6)
         self.device_list.bind("<<ListboxSelect>>", self._use_selected)
         ttk.Button(left, text="重新搜索", command=self.search).pack(anchor="w")
@@ -88,7 +109,7 @@ class BookPushApp:
         ttk.Label(right, text="要送出的书", style="Card.TLabel").pack(anchor="w")
         self.queue_note = ttk.Label(right, text=self.queue.summary(), style="Hint.TLabel", wraplength=340, justify="left")
         self.queue_note.pack(anchor="w", pady=(4, 0))
-        self.file_list = tk.Listbox(right, height=10, font=("Microsoft YaHei UI", 10))
+        self.file_list = tk.Listbox(right, height=10, font=ui, selectmode="extended")
         self.file_list.pack(fill="both", expand=True, pady=6)
         row = ttk.Frame(right, style="Card.TFrame")
         row.pack(fill="x")
@@ -108,7 +129,7 @@ class BookPushApp:
         self.progress.pack(fill="x", pady=(8, 4))
         self.status = ttk.Label(right, text="发送：还没有开始。", style="Card.TLabel", wraplength=340, justify="left")
         self.status.pack(anchor="w")
-        self.log = tk.Text(right, height=8, wrap="word", font=("Microsoft YaHei UI", 9), bg="#FBF7F0")
+        self.log = tk.Text(right, height=8, wrap="word", font=hint, bg="#FBF7F0")
         self.log.pack(fill="both", expand=True, pady=(8, 0))
         self._write("传书时请让手机停在「Wi-Fi 传书」，并允许本地网络。搜不到就填手机上的 IP、端口和配对码。")
         self._write(self._converter_hint())
@@ -153,9 +174,12 @@ class BookPushApp:
             self._use_selected()
 
     def _refresh_queue(self) -> None:
+        rows = self.queue.snapshot()
         self.file_list.delete(0, "end")
-        for label in self.queue.labels():
-            self.file_list.insert("end", label)
+        for entry in rows:
+            self.file_list.insert("end", entry.label)
+            if entry.status == "failed":
+                self.file_list.itemconfig("end", foreground="#8C3A2F")
         self.queue_note.configure(text=self.queue.summary())
 
     def pick_files(self) -> None:
@@ -207,7 +231,7 @@ class BookPushApp:
     def _flush_progress(self) -> None:
         self._progress_job = None
         event = self._pending_progress
-        if event is None:
+        if event is None or not self._sending:
             return
         total = max(event.total, 1)
         value = 100 * event.current / total
@@ -257,33 +281,49 @@ class BookPushApp:
         else:
             search = tool is None
             missing = None
+        for path in files:
+            self.queue.mark_pending(path)
+        self._refresh_queue()
         self._sending = True
         self.convert_progress.configure(value=0)
         self.progress.configure(value=0)
         self.convert_status.configure(text="正在准备转换…")
-        self.status.configure(text="发送：等待可以上传的书。")
+        self.status.configure(text=f"开始传送 {len(files)} 本。转好的会马上发送，直到这一批结束。")
+        self._write(f"开始传送队列里的 {len(files)} 本。")
+
+        def on_outcome(_index: int, outcome: PushOutcome) -> None:
+            def apply(outcome: PushOutcome = outcome) -> None:
+                self._refresh_queue()
+                if outcome.detail and outcome.ok:
+                    self._write(outcome.detail)
+                if outcome.ok:
+                    self._write(f"已送到手机：《{outcome.title or outcome.name}》，已从队列移出。")
+                else:
+                    self._write(f"{outcome.name} 失败：{outcome.detail} 仍留在队列里，可以重试。")
+
+            self.root.after(0, apply)
 
         def work() -> None:
-            outcomes = push_batch(
-                files,
+            outcomes = push_queue(
+                self.queue,
                 host,
                 port,
                 pin,
+                files=files,
                 on_progress=lambda event: self.root.after(0, lambda event=event: self._show_progress(event)),
+                on_outcome=on_outcome,
                 converter=tool,
                 search=search,
                 missing_message=missing,
             )
 
             def finish() -> None:
+                if self._progress_job is not None:
+                    self.root.after_cancel(self._progress_job)
+                    self._progress_job = None
+                self._pending_progress = None
                 self._sending = False
-                for item in outcomes:
-                    if item.detail and item.ok:
-                        self._write(item.detail)
-                    if item.ok:
-                        self._write(f"已送到手机：《{item.title or item.name}》")
-                    else:
-                        self._write(f"{item.name} 失败：{item.detail}")
+                self._refresh_queue()
                 summary = describe_batch(outcomes)
                 self.status.configure(text=summary)
                 self.convert_status.configure(text="转换这一批已经结束。")
