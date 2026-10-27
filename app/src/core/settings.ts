@@ -3,6 +3,7 @@ import {
   type PageTurnMode,
   type ReaderAlign,
   type ReaderFontId,
+  type ReaderScript,
   type ReaderSettings,
   type ReaderTheme,
 } from './types';
@@ -11,6 +12,7 @@ const FONTS: ReaderFontId[] = ['system', 'pingfang', 'songti', 'heiti', 'kaiti',
 const THEMES: ReaderTheme[] = ['light', 'sepia', 'dark'];
 const ALIGNS: ReaderAlign[] = ['left', 'justify', 'center'];
 const PAGE_TURNS: PageTurnMode[] = ['curl', 'slide', 'none'];
+const SCRIPTS: ReaderScript[] = ['original', 'hans', 'hant', 'classical'];
 
 function clamp(value: unknown, min: number, max: number, fallback: number): number {
   const number = typeof value === 'number' ? value : Number(value);
@@ -34,6 +36,12 @@ export function normalizeReaderSettings(raw: unknown): ReaderSettings {
   const pageTurn = PAGE_TURNS.includes(input.pageTurn as PageTurnMode)
     ? (input.pageTurn as PageTurnMode)
     : defaultReaderSettings.pageTurn;
+  const legacyTraditional = typeof input.traditional === 'boolean' ? input.traditional : legacyVertical;
+  const script = SCRIPTS.includes(input.script as ReaderScript)
+    ? (input.script as ReaderScript)
+    : legacyTraditional
+      ? 'hant'
+      : 'original';
   return {
     fontId,
     fontSize: Math.round(clamp(input.fontSize, 14, 36, defaultReaderSettings.fontSize)),
@@ -42,7 +50,8 @@ export function normalizeReaderSettings(raw: unknown): ReaderSettings {
     align,
     theme,
     vertical: typeof input.vertical === 'boolean' ? input.vertical : legacyVertical,
-    traditional: typeof input.traditional === 'boolean' ? input.traditional : legacyVertical,
+    script,
+    traditional: script === 'hant' || script === 'classical',
     brightness: Math.round(clamp(input.brightness, 0.55, 1, defaultReaderSettings.brightness) * 100) / 100,
     pageTurn,
   };

@@ -46,6 +46,8 @@ export type ReaderFontId = 'system' | 'pingfang' | 'songti' | 'heiti' | 'kaiti' 
 export type ReaderTheme = 'light' | 'sepia' | 'dark';
 export type ReaderAlign = 'left' | 'justify' | 'center';
 export type PageTurnMode = 'curl' | 'slide' | 'none';
+/** 原文 keeps the file. 简体 / 繁体 are OpenCC. 古文 is traditional plus literary overrides. */
+export type ReaderScript = 'original' | 'hans' | 'hant' | 'classical';
 
 export type ReaderSettings = {
   fontId: ReaderFontId;
@@ -57,8 +59,10 @@ export type ReaderSettings = {
   theme: ReaderTheme;
   /** 竖排. Independent of simplified-to-traditional conversion. */
   vertical: boolean;
-  /** 简转繁. Independent of vertical layout. */
+  /** 简转繁. True for 繁体 and 古文. Kept so older saves and the WebView font stack still apply. */
   traditional: boolean;
+  /** 原文 / 简体 / 繁体 / 古文. Wins over the legacy `traditional` flag when present. */
+  script: ReaderScript;
   brightness: number;
   /** 卷页 / 滑动 / 无. Reduced motion always uses a short crossfade. */
   pageTurn: PageTurnMode;
@@ -73,6 +77,7 @@ export const defaultReaderSettings: ReaderSettings = {
   theme: 'sepia',
   vertical: false,
   traditional: false,
+  script: 'original',
   brightness: 1,
   pageTurn: 'curl',
 };

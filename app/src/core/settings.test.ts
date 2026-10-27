@@ -7,6 +7,7 @@ describe('reader settings', () => {
     const settings = normalizeReaderSettings({ verticalTraditional: true, fontSize: 18 });
     expect(settings.vertical).toBe(true);
     expect(settings.traditional).toBe(true);
+    expect(settings.script).toBe('hant');
     expect(settings.fontSize).toBe(18);
     expect(settings.lineHeight).toBe(defaultReaderSettings.lineHeight);
   });
@@ -35,6 +36,15 @@ describe('reader settings', () => {
     expect(settings.theme).toBe('sepia');
     expect(settings.brightness).toBe(1);
     expect(settings.pageTurn).toBe('curl');
+    expect(settings.script).toBe('original');
+  });
+
+  it('lets an explicit script win, and marks 古文 as traditional type', () => {
+    expect(normalizeReaderSettings({ script: 'hans', traditional: true }).script).toBe('hans');
+    expect(normalizeReaderSettings({ script: 'hans', traditional: true }).traditional).toBe(false);
+    const classical = normalizeReaderSettings({ script: 'classical' });
+    expect(classical.script).toBe('classical');
+    expect(classical.traditional).toBe(true);
   });
 
   it('keeps curl, slide, and none, and drops anything else', () => {

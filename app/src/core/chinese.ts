@@ -26,8 +26,12 @@ function firstChoice(raw: string): string {
   return choice ?? '';
 }
 
-/** Parse OpenCC STCharacters / STPhrases text (tab-separated, first candidate wins). */
-export function buildConverter(characters: string, phrases: string): (text: string) => string {
+/**
+ * Parse OpenCC dictionaries (tab-separated, first candidate wins).
+ * Later tables overwrite the same key, so an overlay can keep a literary reading.
+ * Longer keys still win at convert time.
+ */
+export function buildConverter(characters: string, phrases: string, overlay = ''): (text: string) => string {
   const root = node();
   const load = (source: string) => {
     for (const line of source.split(/\r?\n/)) {
@@ -41,6 +45,7 @@ export function buildConverter(characters: string, phrases: string): (text: stri
   };
   load(characters);
   load(phrases);
+  load(overlay);
 
   return function convert(text: string): string {
     let out = '';

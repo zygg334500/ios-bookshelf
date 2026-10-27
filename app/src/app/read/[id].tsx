@@ -3,9 +3,11 @@ import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet,
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { lookupClassical, type GlossHit } from '../../core/classicalLexicon';
 import { readingStatus, readingStatusLabel } from '../../core/shelf';
 import { normalizeReaderSettings } from '../../core/settings';
-import { BookError, type LoadedBook, type PageTurnMode, type ReaderAlign, type ReaderFontId, type ReaderSettings, type ReaderTheme } from '../../core/types';
+import { BookError, type LoadedBook, type PageTurnMode, type ReaderAlign, type ReaderFontId, type ReaderScript, type ReaderSettings, type ReaderTheme } from '../../core/types';
+import { loadScriptConverter } from '../../reader/assets';
 import { ReaderPane, type ReaderProgress } from '../../reader/ReaderPane';
 import { useLibrary } from '../../storage/library';
 import { Frosted } from '../../ui/glass';
@@ -39,6 +41,31 @@ const TURN_CHOICES: { id: PageTurnMode; label: string }[] = [
   { id: 'none', label: '无' },
 ];
 
+const SCRIPT_CHOICES: { id: ReaderScript; label: string }[] = [
+  { id: 'original', label: '原文' },
+  { id: 'hans', label: '简体' },
+  { id: 'hant', label: '繁体' },
+  { id: 'classical', label: '古文' },
+];
+
+function useDisplayScript(script: ReaderScript): (text: string) => string {
+  const [convert, setConvert] = useState<(text: string) => string>(() => (text: string) => text);
+  useEffect(() => {
+    let cancelled = false;
+    void loadScriptConverter(script).then((fn) => {
+      if (!cancelled) setConvert(() => fn);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [script]);
+  return convert;
+}
+
+function isCjk(text: string): boolean {
+  return /[\u3400-\u9fff]/.test(text);
+}
+
 const MARGIN_CHOICES: { value: number; label: string }[] = [
   { value: 12, label: '窄' },
   { value: 22, label: '适中' },
@@ -51,7 +78,7 @@ export default function ReadScreen() {
   const bookId = String(id ?? '');
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const sheetHeight = Math.min(520, Math.max(280, Math.round(windowHeight * 0.58)));
   const library = useLibrary();
   const record = library.books.find((book) => book.id === bookId);
@@ -64,7 +91,11 @@ export default function ReadScreen() {
   const [progress, setProgress] = useState<ReaderProgress | null>(null);
   const [seek, setSeek] = useState<{ nonce: number; progress: number | null }>({ nonce: 0, progress: null });
   const [barWidth, setBarWidth] = useState(1);
+  const [gloss, setGloss] = useState<(GlossHit & { x: number; y: number; missing?: boolean }) | null>(null);
+  const [glossOpen, setGlossOpen] = useState(false);
+  const convert = useDisplayScript(settings.script);
   const chromeOpacity = useRef(new Animated.Value(1)).current;
+  const pageKey = useRef('');
 
   useEffect(() => {
     Animated.timing(chromeOpacity, {
@@ -155,9 +186,29 @@ export default function ReadScreen() {
         seekNonce={seek.nonce}
         seekProgress={seek.progress}
         insets={insets}
-        onProgress={setProgress}
+        onProgress={(next) => {
+          const key = `${next.chapterIndex}:${next.pageIndex}`;
+          if (pageKey.current && pageKey.current !== key) setGloss(null);
+          pageKey.current = key;
+          setProgress(next);
+        }}
         onChrome={() => {
           setShowChrome((value) => !value);
+          setPanel('none');
+          setGloss(null);
+        }}
+        onLookup={(hit) => {
+          const found = lookupClassical(hit.text, hit.index);
+          const word = found?.word ?? hit.text.slice(hit.index, hit.index + 1);
+          if (!found && !isCjk(word)) return;
+          setGlossOpen(false);
+          setGloss({
+            word,
+            senses: found?.senses ?? [],
+            missing: !found,
+            x: hit.x,
+            y: hit.y,
+          });
           setPanel('none');
         }}
         onCover={(dataUrl) => void library.saveCover(bookId, dataUrl)}
@@ -270,16 +321,23 @@ export default function ReadScreen() {
           radius={28}
           style={[styles.sheet, { left: Math.max(insets.left, 12), right: Math.max(insets.right, 12), bottom: Math.max(insets.bottom, 8), height: sheetHeight }]}
         >
-          <View style={styles.grabberWrap}>
-            <View style={[styles.grabber, { backgroundColor: colors.muted }]} />
-          </View>
-          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+          <View style={styles.sheetPin}>
+            <View style={styles.grabberWrap}>
+              <View style={[styles.grabber, { backgroundColor: colors.muted }]} />
+            </View>
             <View style={styles.sheetHead}>
               <Text style={[styles.sheetTitle, { color: colors.ink }]}>排版</Text>
-              <Pressable onPress={() => setPanel('none')} hitSlop={8}>
-                <Text style={[styles.barText, { color: colors.ink }]}>完成</Text>
+              <Pressable
+                onPress={() => setPanel('none')}
+                hitSlop={12}
+                style={[styles.doneButton, { backgroundColor: shelf.accent }]}
+              >
+                <Text style={styles.doneButtonText}>完成</Text>
               </Pressable>
             </View>
+            <View style={[styles.hairline, { backgroundColor: hairline }]} />
+          </View>
+          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
             <View style={styles.row}>
               <Pressable onPress={() => void library.clearBookSettings(bookId)} style={[...choiceFace, !scopedToBook && styles.chipOn]}>
                 <Text style={choiceText}>全部书籍</Text>
@@ -358,14 +416,19 @@ export default function ReadScreen() {
               <Pressable style={[...choiceFace, settings.vertical && styles.chipOn]} onPress={() => patch({ vertical: !settings.vertical })}>
                 <Text style={choiceText}>竖排 {settings.vertical ? '开' : '关'}</Text>
               </Pressable>
-              <Pressable style={[...choiceFace, settings.traditional && styles.chipOn]} onPress={() => patch({ traditional: !settings.traditional })}>
-                <Text style={choiceText}>简转繁 {settings.traditional ? '开' : '关'}</Text>
-              </Pressable>
+            </View>
+            <Text style={[styles.label, { color: colors.ink }]}>文字</Text>
+            <View style={styles.row}>
+              {SCRIPT_CHOICES.map((choice) => (
+                <Pressable key={choice.id} onPress={() => patch({ script: choice.id })} style={[...choiceFace, settings.script === choice.id && styles.chipOn]}>
+                  <Text style={choiceText}>{choice.label}</Text>
+                </Pressable>
+              ))}
             </View>
             <Text style={[styles.note, { color: colors.muted }]}>
               {loaded.format === 'pdf'
-                ? 'PDF 保持原页面。字号、字体、行距、边距、对齐、竖排和简转繁对它不起作用。纸色和亮度仍然有效。'
-                : '中文正文首行缩进两个字，段距收紧，接近 Apple Books。竖排使用 writing-mode: vertical-rl。简转繁来自 OpenCC 字词表，原文件不改，个别多义字可能不是你要的那个。'}
+                ? 'PDF 保持原页面。字号、字体、行距、边距、对齐、竖排和简繁转换对它不起作用。纸色和亮度仍然有效。'
+                : '简体、繁体按 OpenCC 词表整词转换，不只逐字替换。古文在繁体上保留「余」「云」这类文言用字。长按正文可查白话。原文件不改。'}
             </Text>
             <Text style={[styles.note, { color: colors.ink }]}>纸面亮度 {Math.round(settings.brightness * 100)}%</Text>
             <View style={styles.row}>
@@ -385,24 +448,39 @@ export default function ReadScreen() {
             style={[
               styles.tocHead,
               {
-                paddingTop: insets.top + 8,
-                paddingLeft: Math.max(insets.left, 18),
-                paddingRight: Math.max(insets.right, 18),
+                paddingTop: insets.top + 10,
+                paddingLeft: Math.max(insets.left, 20),
+                paddingRight: Math.max(insets.right, 16),
               },
             ]}
           >
-            <Text style={[styles.sheetTitle, { color: colors.ink }]}>目录</Text>
-            <Pressable onPress={() => setPanel('none')} hitSlop={8}>
-              <Text style={[styles.barText, { color: colors.ink }]}>完成</Text>
+            <View style={styles.tocTitleBlock}>
+              <Text style={[styles.tocKicker, { color: colors.muted }]}>目录</Text>
+              <Text numberOfLines={1} style={[styles.tocBook, { color: colors.ink }]}>
+                {convert(loaded.title)}
+              </Text>
+              {loaded.author ? (
+                <Text numberOfLines={1} style={[styles.tocAuthor, { color: colors.muted }]}>
+                  {loaded.author}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable onPress={() => setPanel('none')} hitSlop={12} style={[styles.doneButton, { backgroundColor: shelf.accent }]}>
+              <Text style={styles.doneButtonText}>完成</Text>
             </Pressable>
           </View>
+          <View style={[styles.hairline, { backgroundColor: hairline }]} />
           <ScrollView
             contentInsetAdjustmentBehavior="never"
-            contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 24, gap: 8 }}
+            contentContainerStyle={{
+              paddingHorizontal: Math.max(insets.left, 8),
+              paddingRight: Math.max(insets.right, 8),
+              paddingBottom: insets.bottom + 28,
+            }}
           >
-            <Text style={[styles.sheetTitle, { color: colors.ink }]}>书签</Text>
+            <Text style={[styles.tocSection, { color: colors.muted }]}>书签</Text>
             {(library.bookmarks[bookId] ?? []).length === 0 ? (
-              <Text style={[styles.note, { color: colors.muted }]}>还没有书签。阅读时点上方「书签」记住这一页。</Text>
+              <Text style={[styles.tocEmpty, { color: colors.muted }]}>还没有书签</Text>
             ) : null}
             {(library.bookmarks[bookId] ?? []).map((mark) => (
               <Pressable
@@ -411,26 +489,73 @@ export default function ReadScreen() {
                   setSeek({ nonce: Date.now(), progress: mark.progress });
                   setPanel('none');
                 }}
+                style={[styles.tocRow, { borderBottomColor: hairline }]}
               >
-                <Text style={[styles.tocItem, { color: colors.ink }]}>{mark.label} · 第 {mark.pageIndex + 1} 页</Text>
+                <View style={styles.tocMark} />
+                <View style={styles.tocCopy}>
+                  <Text numberOfLines={1} style={[styles.tocItem, { color: colors.ink }]}>
+                    {convert(mark.label)}
+                  </Text>
+                  <Text style={[styles.tocMeta, { color: colors.muted }]}>第 {mark.pageIndex + 1} 页</Text>
+                </View>
               </Pressable>
             ))}
-            <Text style={[styles.sheetTitle, { color: colors.ink, marginTop: 12 }]}>目录</Text>
-            {(loaded.toc.length ? loaded.toc : loaded.chapters.map((chapter, chapterIndex) => ({ title: chapter.title, chapterIndex }))).map((item, index) => (
-              <Pressable
-                key={`${item.chapterIndex}-${index}`}
-                onPress={() => {
-                  const count = Math.max(loaded.chapters.length, 1);
-                  setSeek({ nonce: Date.now(), progress: item.chapterIndex / count });
-                  setPanel('none');
-                }}
-              >
-                <Text style={[styles.tocItem, { color: colors.ink }]}>{item.title}</Text>
-              </Pressable>
-            ))}
-            {loaded.format === 'pdf' ? <Text style={[styles.note, { color: colors.muted }]}>这本 PDF 没有目录，用底部进度条翻页。</Text> : null}
+            <Text style={[styles.tocSection, { color: colors.muted }]}>章节</Text>
+            {(loaded.toc.length ? loaded.toc : loaded.chapters.map((chapter, chapterIndex) => ({ title: chapter.title, chapterIndex }))).map((item, index) => {
+              const active = progress?.chapterIndex === item.chapterIndex;
+              return (
+                <Pressable
+                  key={`${item.chapterIndex}-${index}`}
+                  onPress={() => {
+                    const count = Math.max(loaded.chapters.length, 1);
+                    setSeek({ nonce: Date.now(), progress: item.chapterIndex / count });
+                    setPanel('none');
+                  }}
+                  style={[styles.tocRow, { borderBottomColor: hairline }]}
+                >
+                  <View style={[styles.tocMark, active && { backgroundColor: shelf.accent }]} />
+                  <Text numberOfLines={2} style={[styles.tocItem, { color: active ? shelf.accent : colors.ink }, active && styles.tocCurrent]}>
+                    {convert(item.title)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            {loaded.format === 'pdf' ? <Text style={[styles.tocEmpty, { color: colors.muted }]}>这本 PDF 没有目录，用底部进度条翻页。</Text> : null}
           </ScrollView>
         </Frosted>
+      ) : null}
+      {gloss ? (
+        <View style={styles.glossLayer} pointerEvents="box-none">
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setGloss(null)} />
+          <View
+            style={[
+              styles.glossCard,
+              {
+                backgroundColor: colors.paper,
+                borderColor: hairline,
+                left: Math.max(insets.left + 12, Math.min(gloss.x - 24, windowWidth - 280 - insets.right)),
+                top: Math.max(insets.top + 12, Math.min(gloss.y - (gloss.y > windowHeight * 0.62 ? 148 : -28), windowHeight - insets.bottom - 180)),
+              },
+            ]}
+          >
+            <Text style={[styles.glossWord, { color: colors.ink }]}>{gloss.word}</Text>
+            <Text style={[styles.glossSense, { color: colors.ink }]}>
+              {gloss.missing ? '词表里还没有这条。释义都在本机，不联网。' : gloss.senses[0]}
+            </Text>
+            {!gloss.missing && gloss.senses.length > 1 && !glossOpen ? (
+              <Pressable onPress={() => setGlossOpen(true)} hitSlop={8}>
+                <Text style={[styles.glossMore, { color: shelf.accent }]}>更多</Text>
+              </Pressable>
+            ) : null}
+            {glossOpen
+              ? gloss.senses.slice(1).map((sense) => (
+                  <Text key={sense} style={[styles.glossSense, { color: colors.muted }]}>
+                    {sense}
+                  </Text>
+                ))
+              : null}
+          </View>
+        </View>
       ) : null}
     </View>
   );
@@ -465,11 +590,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 8,
   },
-  grabberWrap: { alignItems: 'center', paddingTop: 8 },
+  sheetPin: { paddingHorizontal: 16, paddingBottom: 8 },
+  grabberWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 6 },
   grabber: { width: 36, height: 5, borderRadius: 3, opacity: 0.45 },
   sheetScroll: { flex: 1 },
-  sheetBody: { paddingHorizontal: 16, paddingBottom: 20, gap: 10 },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetBody: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20, gap: 10 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  doneButton: {
+    minHeight: 36,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneButtonText: { color: shelf.accentInk, fontFamily: fonts.ui, fontSize: 15, fontWeight: '600' },
   sheetTitle: { fontFamily: fonts.ui, fontSize: 22, fontWeight: '700' },
   label: { fontFamily: fonts.ui, fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
@@ -486,6 +620,42 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: fonts.ui, fontSize: 14 },
   note: { fontFamily: fonts.ui, lineHeight: 20, fontSize: 13 },
   toc: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
-  tocHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4 },
-  tocItem: { fontFamily: fonts.display, fontSize: 20, lineHeight: 28, paddingVertical: 8 },
+  tocHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingBottom: 12 },
+  tocTitleBlock: { flex: 1, gap: 2 },
+  tocKicker: { fontFamily: fonts.ui, fontSize: 12, fontWeight: '600', letterSpacing: 0.6 },
+  tocBook: { fontFamily: fonts.ui, fontSize: 20, fontWeight: '700', lineHeight: 26 },
+  tocAuthor: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 },
+  tocSection: { fontFamily: fonts.ui, fontSize: 12, fontWeight: '600', letterSpacing: 0.4, marginTop: 16, marginBottom: 4, marginLeft: 16 },
+  tocEmpty: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, marginLeft: 16, marginBottom: 4 },
+  tocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 11,
+    paddingRight: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tocMark: { width: 2, alignSelf: 'stretch', borderRadius: 1, marginLeft: 8 },
+  tocCopy: { flex: 1, gap: 2 },
+  tocItem: { flex: 1, fontFamily: fonts.ui, fontSize: 16, lineHeight: 22 },
+  tocCurrent: { fontWeight: '700' },
+  tocMeta: { fontFamily: fonts.ui, fontSize: 12, lineHeight: 16 },
+  glossLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 6 },
+  glossCard: {
+    position: 'absolute',
+    width: 268,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+    shadowColor: '#1c140e',
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  glossWord: { fontFamily: fonts.display, fontSize: 22, lineHeight: 28 },
+  glossSense: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 22 },
+  glossMore: { fontFamily: fonts.ui, fontSize: 14, fontWeight: '600' },
 });

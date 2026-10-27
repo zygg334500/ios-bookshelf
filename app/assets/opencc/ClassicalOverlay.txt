@@ -1,0 +1,9 @@
+# BookShelf classical-reading overrides.
+# Loaded after OpenCC STCharacters and STPhrases, so the same key replaces
+# the modern first choice. Longer OpenCC phrases still win: 剩余、云彩、以后、征伐 stay mapped.
+# Append a line (key, tab, value) to extend. Original files are not modified.
+余	余
+云	云
+征	征
+后	后
+里	里

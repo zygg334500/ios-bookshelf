@@ -1382,13 +1382,50 @@
     return 0;
   }
 
+  var LOOKUP_MS = 460;
+
+  function wordAt(x, y) {
+    var range = null;
+    if (document.caretRangeFromPoint) range = document.caretRangeFromPoint(x, y);
+    else if (document.caretPositionFromPoint) {
+      var pos = document.caretPositionFromPoint(x, y);
+      if (pos && pos.offsetNode) {
+        range = document.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+      }
+    }
+    if (!range || !range.startContainer || range.startContainer.nodeType !== 3) return null;
+    var node = range.startContainer;
+    var parent = node.parentNode;
+    if (!parent) return null;
+    var full = '';
+    var index = 0;
+    var found = false;
+    for (var child = parent.firstChild; child; child = child.nextSibling) {
+      var chunk = child.textContent || '';
+      if (child === node) {
+        index = full.length + Math.min(range.startOffset, chunk.length);
+        found = true;
+      }
+      full += chunk;
+    }
+    if (!found || !full) return null;
+    if (index >= full.length) index = Math.max(0, full.length - 1);
+    var from = Math.max(0, index - 6);
+    var to = Math.min(full.length, index + 6);
+    return { text: full.slice(from, to), index: index - from };
+  }
+
   var drag = null;
   stage.addEventListener('pointerdown', function (event) {
+    if (drag && drag.lookupTimer) clearTimeout(drag.lookupTimer);
     drag = {
       x: event.clientX,
       y: event.clientY,
       t: performance.now(),
       moved: false,
+      lookup: false,
+      lookupTimer: 0,
       lx: event.clientX,
       lt: performance.now(),
       vx: 0,
@@ -1397,6 +1434,14 @@
       painted: false,
       effect: effectFor(state.settings.pageTurn, reducedMotion())
     };
+    var held = drag;
+    held.lookupTimer = setTimeout(function () {
+      if (drag !== held || held.moved) return;
+      var hit = wordAt(held.x, held.y);
+      if (!hit || !hit.text) return;
+      held.lookup = true;
+      post({ type: 'lookup', text: hit.text, index: hit.index, x: held.x, y: held.y });
+    }, LOOKUP_MS);
   });
   window.addEventListener('pointermove', function (event) {
     if (!drag) return;
@@ -1405,6 +1450,7 @@
     if (!drag.moved && (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy))) return;
     if (!drag.moved) {
       drag.moved = true;
+      if (drag.lookupTimer) clearTimeout(drag.lookupTimer);
       pending = 0;
       if (anim) {
         anim = null;
@@ -1451,6 +1497,8 @@
     var width = Math.max(stage.clientWidth, 1);
     var start = drag;
     drag = null;
+    if (start.lookupTimer) clearTimeout(start.lookupTimer);
+    if (start.lookup) return;
     if (!start.moved) {
       var zone = start.x / width;
       var vertical = isVertical();

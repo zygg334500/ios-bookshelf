@@ -5,7 +5,11 @@ import pdfModule from '../../assets/pdfjs/pdf.min.pdfjs';
 import workerModule from '../../assets/pdfjs/pdf.worker.min.pdfjs';
 import charactersModule from '../../assets/opencc/STCharacters.txt';
 import phrasesModule from '../../assets/opencc/STPhrases.txt';
+import tsCharactersModule from '../../assets/opencc/TSCharacters.txt';
+import tsPhrasesModule from '../../assets/opencc/TSPhrases.txt';
+import classicalModule from '../../assets/opencc/ClassicalOverlay.txt';
 import { buildConverter } from '../core/chinese';
+import type { ReaderScript } from '../core/types';
 
 async function readAssetText(moduleId: number): Promise<string> {
   const asset = Asset.fromModule(moduleId);
@@ -60,20 +64,36 @@ export function loadReaderHtml(): Promise<string> {
   return shellCache;
 }
 
-let converterCache: Promise<(text: string) => string> | null = null;
+const scriptCaches = new Map<ReaderScript, Promise<(text: string) => string>>();
 
-export function loadConverter(): Promise<(text: string) => string> {
-  if (!converterCache) {
-    converterCache = (async () => {
+/** OpenCC longest-match converter for 简体 / 繁体 / 古文. 原文 is identity. */
+export function loadScriptConverter(mode: ReaderScript): Promise<(text: string) => string> {
+  if (mode === 'original') return Promise.resolve((text) => text);
+  const cached = scriptCaches.get(mode);
+  if (cached) return cached;
+  const pending = (async () => {
+    if (mode === 'hans') {
       const [characters, phrases] = await Promise.all([
-        readAssetText(charactersModule),
-        readAssetText(phrasesModule),
+        readAssetText(tsCharactersModule),
+        readAssetText(tsPhrasesModule),
       ]);
       return buildConverter(characters, phrases);
-    })().catch((error) => {
-      converterCache = null;
-      throw error;
-    });
-  }
-  return converterCache;
+    }
+    const [characters, phrases, overlay] = await Promise.all([
+      readAssetText(charactersModule),
+      readAssetText(phrasesModule),
+      mode === 'classical' ? readAssetText(classicalModule) : Promise.resolve(''),
+    ]);
+    return buildConverter(characters, phrases, overlay);
+  })().catch((error) => {
+    scriptCaches.delete(mode);
+    throw error;
+  });
+  scriptCaches.set(mode, pending);
+  return pending;
+}
+
+/** 繁体. Kept for callers that only need simplified-to-traditional. */
+export function loadConverter(): Promise<(text: string) => string> {
+  return loadScriptConverter('hant');
 }
