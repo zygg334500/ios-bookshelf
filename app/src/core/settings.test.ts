@@ -34,6 +34,14 @@ describe('reader settings', () => {
     expect(settings.align).toBe('justify');
     expect(settings.theme).toBe('sepia');
     expect(settings.brightness).toBe(1);
+    expect(settings.pageTurn).toBe('curl');
+  });
+
+  it('keeps curl, slide, and none, and drops anything else', () => {
+    expect(normalizeReaderSettings({ pageTurn: 'slide' }).pageTurn).toBe('slide');
+    expect(normalizeReaderSettings({ pageTurn: 'none' }).pageTurn).toBe('none');
+    expect(normalizeReaderSettings({ pageTurn: 'curl' }).pageTurn).toBe('curl');
+    expect(normalizeReaderSettings({ pageTurn: 'flip' }).pageTurn).toBe('curl');
   });
 
   it('reads a global blob and per-book overrides', () => {

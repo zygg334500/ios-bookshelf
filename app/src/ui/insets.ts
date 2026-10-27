@@ -24,8 +24,8 @@ export function bottomChromePadding(insets: EdgeInsets): number {
 
 export function shelfContentPadding(insets: EdgeInsets) {
   return {
-    paddingTop: insets.top + 8,
-    paddingBottom: insets.bottom + 16,
+    paddingTop: insets.top + 4,
+    paddingBottom: insets.bottom + 12,
     paddingLeft: Math.max(insets.left, 16),
     paddingRight: Math.max(insets.right, 16),
   };

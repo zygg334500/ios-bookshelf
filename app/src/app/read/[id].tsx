@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { readingStatus, readingStatusLabel } from '../../core/shelf';
 import { normalizeReaderSettings } from '../../core/settings';
-import { BookError, type LoadedBook, type ReaderAlign, type ReaderFontId, type ReaderSettings, type ReaderTheme } from '../../core/types';
+import { BookError, type LoadedBook, type PageTurnMode, type ReaderAlign, type ReaderFontId, type ReaderSettings, type ReaderTheme } from '../../core/types';
 import { ReaderPane, type ReaderProgress } from '../../reader/ReaderPane';
 import { useLibrary } from '../../storage/library';
 import { Frosted } from '../../ui/glass';
@@ -31,6 +31,12 @@ const ALIGN_CHOICES: { id: ReaderAlign; label: string }[] = [
   { id: 'left', label: '左对齐' },
   { id: 'justify', label: '两端' },
   { id: 'center', label: '居中' },
+];
+
+const TURN_CHOICES: { id: PageTurnMode; label: string }[] = [
+  { id: 'curl', label: '卷页' },
+  { id: 'slide', label: '滑动' },
+  { id: 'none', label: '无' },
 ];
 
 const MARGIN_CHOICES: { value: number; label: string }[] = [
@@ -231,7 +237,7 @@ export default function ReadScreen() {
             <Text style={[styles.meta, { color: colors.muted }]} numberOfLines={1}>
               {progress
                 ? `${readingStatusLabel(status)} · ${progress.chapterTitle || '正文'} · ${progress.pageIndex + 1}/${Math.max(progress.pageCount, 1)}`
-                : '左右滑动翻页，点页面中间收起菜单'}
+                : '点右侧或滑动翻页，点页面中间收起菜单'}
             </Text>
             <View style={styles.bottomControls}>
               <Pressable
@@ -329,6 +335,17 @@ export default function ReadScreen() {
                 </Pressable>
               ))}
             </View>
+            <Text style={[styles.label, { color: colors.ink }]}>翻页</Text>
+            <View style={styles.row}>
+              {TURN_CHOICES.map((choice) => (
+                <Pressable key={choice.id} onPress={() => patch({ pageTurn: choice.id })} style={[...choiceFace, settings.pageTurn === choice.id && styles.chipOn]}>
+                  <Text style={choiceText}>{choice.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={[styles.note, { color: colors.muted }]}>
+              卷页的背面是同一张纸的颜色，折痕连着下一页，不会闪出一块白纸。连续点右侧会尽快翻过去。滑动是短横滑，无则立刻换页。系统开了「减少动态效果」时改为短淡入。
+            </Text>
             <Text style={[styles.label, { color: colors.ink }]}>纸色</Text>
             <View style={styles.row}>
               {THEME_CHOICES.map((choice) => (

@@ -45,6 +45,7 @@ export type BookRecord = {
 export type ReaderFontId = 'system' | 'pingfang' | 'songti' | 'heiti' | 'kaiti' | 'yuanti';
 export type ReaderTheme = 'light' | 'sepia' | 'dark';
 export type ReaderAlign = 'left' | 'justify' | 'center';
+export type PageTurnMode = 'curl' | 'slide' | 'none';
 
 export type ReaderSettings = {
   fontId: ReaderFontId;
@@ -59,6 +60,8 @@ export type ReaderSettings = {
   /** 简转繁. Independent of vertical layout. */
   traditional: boolean;
   brightness: number;
+  /** 卷页 / 滑动 / 无. Reduced motion always uses a short crossfade. */
+  pageTurn: PageTurnMode;
 };
 
 export const defaultReaderSettings: ReaderSettings = {
@@ -71,6 +74,7 @@ export const defaultReaderSettings: ReaderSettings = {
   vertical: false,
   traditional: false,
   brightness: 1,
+  pageTurn: 'curl',
 };
 
 export class BookError extends Error {

@@ -27,7 +27,28 @@ export function summarizeImports(attempts: ImportAttempt[]): string {
 
 export function shelfCountLabel(count: number): string {
   if (count <= 0) return '架上还没有书。';
-  return `架上 ${count} 本。点封面打开，点「移出」再点一次确认拿走。`;
+  return `架上 ${count} 本。点封面打开，长按封面可移出或标为读完。`;
+}
+
+/** iPhone portrait stays 3-up. Covers are 2:3 with a 14pt gutter. */
+export function shelfGrid(width: number, paddingLeft: number, paddingRight: number) {
+  const gap = 14;
+  const columns = width >= 1100 ? 6 : width >= 840 ? 5 : width >= 640 ? 4 : 3;
+  const inner = Math.max(0, width - paddingLeft - paddingRight - gap * (columns - 1));
+  const coverWidth = Math.max(64, Math.floor(inner / columns));
+  const coverHeight = Math.round(coverWidth * 1.5);
+  return { columns, gap, coverWidth, coverHeight, radius: 4 };
+}
+
+/** The book to pin in 继续阅读: in progress, most recently opened. */
+export function continueReading<T extends ShelfEntry>(books: T[]): T | null {
+  let best: T | null = null;
+  for (const book of books) {
+    if (readingStatus(book) !== 'reading') continue;
+    const opened = book.lastOpenedAt ?? 0;
+    if (!best || opened > (best.lastOpenedAt ?? 0)) best = book;
+  }
+  return best;
 }
 
 export type ShelfSort = 'recent' | 'title' | 'author' | 'progress' | 'opened';
