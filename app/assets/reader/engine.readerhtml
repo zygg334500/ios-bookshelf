@@ -61,6 +61,13 @@
     -webkit-font-smoothing: antialiased;
   }
   #leaf { z-index: 2; }
+  /* .prose * forces visibility:visible !important, so visibility:hidden on #leaf
+     does not hide the glyphs and the live page ghosts under the curl.
+     Opacity is a group: 0 hides every descendant. */
+  #leaf.curl-source-off {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
   #under { z-index: 1; }
   .edge { position: absolute; top: 0; bottom: 0; width: 28px; pointer-events: none; opacity: 0; }
   .edge-left { left: 0; background: linear-gradient(90deg, rgba(40, 24, 10, 0.18), rgba(40, 24, 10, 0)); }
@@ -73,14 +80,26 @@
     transform-style: preserve-3d; -webkit-transform-style: preserve-3d;
   }
   #curl[hidden] { display: none !important; }
+  /* Cloned pads inherit the stage fade. A transition here keeps a stale text layer in WKWebView. */
+  #curl, #curl * {
+    transition: none !important;
+    animation: none !important;
+  }
   #curl .strip {
     position: absolute; top: 0; bottom: 0;
     transform-style: preserve-3d; -webkit-transform-style: preserve-3d;
   }
+  #curl .strip.gone { display: none !important; }
+  #curl .strip.show-back .face.front { display: none !important; }
+  #curl .strip.show-front .face.back { display: none !important; }
   #curl .face {
-    position: absolute; inset: 0; overflow: hidden;
+    position: absolute; inset: 0; overflow: visible;
     background: var(--paper); background-color: var(--paper);
     backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  }
+  #curl .face-clip {
+    position: absolute; inset: 0; overflow: hidden;
+    background-color: var(--paper);
   }
   #curl .face.back {
     transform: rotateY(180deg); -webkit-transform: rotateY(180deg);
@@ -770,13 +789,22 @@
     report();
   }
 
+  function clearCurlCover() {
+    leaf.classList.remove('curl-source-off');
+    leaf.style.opacity = '1';
+    leaf.style.visibility = 'visible';
+    if (under) {
+      under.style.clipPath = '';
+      under.style.webkitClipPath = '';
+    }
+  }
+
   function restLeaf() {
     motion += 1;
     anim = null;
     setLeafX(0);
     paintEdge(0, 1);
-    leaf.style.opacity = '1';
-    leaf.style.visibility = 'visible';
+    clearCurlCover();
     leaf.style.transformStyle = 'flat';
     leaf.style.webkitTransformStyle = 'flat';
     stage.classList.remove('curling');
@@ -954,7 +982,7 @@
     var frag = document.createDocumentFragment();
     for (var i = 0; i < STRIP_COUNT; i++) {
       var strip = document.createElement('div');
-      strip.className = 'strip';
+      strip.className = 'strip show-front';
       var cssW = Math.ceil(sw + 1);
       strip.style.left = (i * sw) + 'px';
       strip.style.width = cssW + 'px';
@@ -963,14 +991,17 @@
       front.className = 'face front';
       front.style.backgroundColor = paper;
       front.style.transform = 'rotateY(0deg)';
+      var clip = document.createElement('div');
+      clip.className = 'face-clip';
       if (htmlMode && master) {
         var piece = i === STRIP_COUNT - 1 ? master : master.cloneNode(true);
         piece.style.left = (-i * sw) + 'px';
         piece.style.width = width + 'px';
-        front.appendChild(piece);
+        clip.appendChild(piece);
       } else {
-        front.appendChild(pdfSlice(i, sw, cssW, width, height, paper));
+        clip.appendChild(pdfSlice(i, sw, cssW, width, height, paper));
       }
+      front.appendChild(clip);
       var back = document.createElement('div');
       back.className = 'face back';
       back.style.backgroundColor = paper;
@@ -985,8 +1016,14 @@
     curlRoot.appendChild(frag);
     curlRoot.hidden = false;
     stage.classList.add('curling');
+    leaf.classList.add('curl-source-off');
     leaf.style.visibility = 'hidden';
+    leaf.style.willChange = 'auto';
     if (foldShadow) foldShadow.hidden = false;
+  }
+
+  function hideStrip(strip) {
+    strip.className = 'strip gone';
   }
 
   function peelFromRight(dir) {
@@ -994,7 +1031,7 @@
   }
 
   function showFlat(strip, x, fromRight) {
-    strip.style.visibility = 'visible';
+    strip.className = 'strip show-front';
     strip.style.left = x + 'px';
     strip.style.transformOrigin = fromRight ? '0% 50%' : '100% 50%';
     strip.style.transform = 'rotateY(0deg)';
@@ -1002,7 +1039,7 @@
   }
 
   function showRot(strip, x, origin, deg) {
-    strip.style.visibility = 'visible';
+    strip.className = Math.abs(deg) >= 90 ? 'strip show-back' : 'strip show-front';
     strip.style.left = (Math.round(x * 10) / 10) + 'px';
     strip.style.transformOrigin = origin;
     var value = 'rotateY(' + deg.toFixed(2) + 'deg) translateZ(0.1px)';
@@ -1028,17 +1065,25 @@
       }
       if (fromRight) {
         if (x0 + sw <= foldX + 0.5) { showFlat(strip, x0, true); continue; }
-        if (x0 >= foldX + Math.PI * radius) { strip.style.visibility = 'hidden'; continue; }
+        if (x0 >= foldX + Math.PI * radius) { hideStrip(strip); continue; }
         var theta = Math.max(0, (x0 - foldX) / radius);
-        if (theta >= Math.PI - 0.02) { strip.style.visibility = 'hidden'; continue; }
+        if (theta >= Math.PI - 0.02) { hideStrip(strip); continue; }
         showRot(strip, foldX + Math.sin(theta) * radius, '0% 50%', -theta * 180 / Math.PI);
       } else {
         if (x0 >= foldX - 0.5) { showFlat(strip, x0, false); continue; }
-        if (x0 + sw <= foldX - Math.PI * radius) { strip.style.visibility = 'hidden'; continue; }
+        if (x0 + sw <= foldX - Math.PI * radius) { hideStrip(strip); continue; }
         var thetaL = Math.max(0, (foldX - (x0 + sw)) / radius);
-        if (thetaL >= Math.PI - 0.02) { strip.style.visibility = 'hidden'; continue; }
+        if (thetaL >= Math.PI - 0.02) { hideStrip(strip); continue; }
         showRot(strip, foldX - Math.sin(thetaL) * radius - sw, '100% 50%', thetaL * 180 / Math.PI);
       }
+    }
+    if (under) {
+      var cut = Math.max(0, Math.min(width, foldX));
+      var clip = fromRight
+        ? 'inset(0px 0px 0px ' + cut + 'px)'
+        : 'inset(0px ' + (width - cut) + 'px 0px 0px)';
+      under.style.clipPath = clip;
+      under.style.webkitClipPath = clip;
     }
     if (foldShadow) {
       var crease = Math.max(-30, Math.min(width - 20, foldX));
@@ -1387,7 +1432,7 @@
         curlStrips = [];
         if (curlRoot) { curlRoot.innerHTML = ''; curlRoot.hidden = true; }
         stage.classList.remove('curling');
-        leaf.style.visibility = 'visible';
+        clearCurlCover();
       }
       var x = dest ? Math.max(-width, Math.min(width, dx)) : dx * 0.2;
       drag.offset = x;
