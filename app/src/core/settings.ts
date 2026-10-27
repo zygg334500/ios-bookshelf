@@ -1,5 +1,6 @@
 import {
   defaultReaderSettings,
+  type PageTurnMode,
   type ReaderAlign,
   type ReaderFontId,
   type ReaderSettings,
@@ -9,6 +10,7 @@ import {
 const FONTS: ReaderFontId[] = ['system', 'pingfang', 'songti', 'heiti', 'kaiti', 'yuanti'];
 const THEMES: ReaderTheme[] = ['light', 'sepia', 'dark'];
 const ALIGNS: ReaderAlign[] = ['left', 'justify', 'center'];
+const PAGE_TURNS: PageTurnMode[] = ['curl', 'slide', 'none'];
 
 function clamp(value: unknown, min: number, max: number, fallback: number): number {
   const number = typeof value === 'number' ? value : Number(value);
@@ -29,6 +31,9 @@ export function normalizeReaderSettings(raw: unknown): ReaderSettings {
   const align = ALIGNS.includes(input.align as ReaderAlign)
     ? (input.align as ReaderAlign)
     : defaultReaderSettings.align;
+  const pageTurn = PAGE_TURNS.includes(input.pageTurn as PageTurnMode)
+    ? (input.pageTurn as PageTurnMode)
+    : defaultReaderSettings.pageTurn;
   return {
     fontId,
     fontSize: Math.round(clamp(input.fontSize, 14, 36, defaultReaderSettings.fontSize)),
@@ -39,6 +44,7 @@ export function normalizeReaderSettings(raw: unknown): ReaderSettings {
     vertical: typeof input.vertical === 'boolean' ? input.vertical : legacyVertical,
     traditional: typeof input.traditional === 'boolean' ? input.traditional : legacyVertical,
     brightness: Math.round(clamp(input.brightness, 0.55, 1, defaultReaderSettings.brightness) * 100) / 100,
+    pageTurn,
   };
 }
 

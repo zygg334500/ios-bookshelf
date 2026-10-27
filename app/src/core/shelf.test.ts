@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  continueReading,
   filterAndSortBooks,
   readingStatus,
   readingStatusLabel,
   shelfCountLabel,
+  shelfGrid,
   statusCounts,
   statusSummary,
   summarizeImports,
@@ -65,5 +67,21 @@ describe('shelf batch', () => {
     expect(filterAndSortBooks(books, '', 'title', 'finished').map((book) => book.title)).toEqual(['无锁的样本']);
     expect(filterAndSortBooks(books, '甲', 'recent', 'reading').map((book) => book.title)).toEqual(['窗下']);
     expect(filterAndSortBooks(books, '', 'recent', 'unread').map((book) => book.title)).toEqual(['纸边笔记']);
+  });
+
+  it('pins the most recently opened in-progress book and lays out a 3-up 2:3 grid', () => {
+    const books: ShelfEntry[] = [
+      { title: '窗下', author: '甲', fileName: 'window.epub', addedAt: 1, progress: 0.2, lastOpenedAt: 5 },
+      { title: '纸边笔记', author: '乙', fileName: 'notes.pdf', addedAt: 3, progress: 0, lastOpenedAt: null },
+      { title: '无锁的样本', author: '甲', fileName: 'window-free.azw3', addedAt: 2, progress: 0.4, lastOpenedAt: 9 },
+    ];
+    expect(continueReading(books)?.title).toBe('无锁的样本');
+    expect(continueReading([books[1]])).toBeNull();
+    const grid = shelfGrid(390, 16, 16);
+    expect(grid.columns).toBe(3);
+    expect(grid.gap).toBe(14);
+    expect(grid.radius).toBe(4);
+    expect(grid.coverHeight).toBe(Math.round(grid.coverWidth * 1.5));
+    expect(grid.coverWidth).toBeGreaterThan(100);
   });
 });

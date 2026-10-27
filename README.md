@@ -103,7 +103,7 @@ Bundle ID 默认是 `com.fengyang.bookshelf`。要改的话，改 `app/app.json`
 2. 电脑打开 BookPush，搜索设备；搜不到就把手填 IP 和端口（默认 27780）。
 3. 点「加入书籍」，可以一次加入多本 PDF、EPUB、无 DRM 的 AZW3。点「移出」拿掉选中的几本，点「清空」倒掉队列。手机上已经收下的书不会被删掉。
 4. 输入配对码，点一次「开始传书」。队列里的书会一起处理：无 DRM 的 AZW3 多本并行转换，转好的马上接着发送，直到这一批结束，不用一本一本点。送到手机的书会从队列里消失。失败的（例如有 DRM）留下，标题标成「失败，可重试」，再点一次「开始传书」就重试。其中一本失败不会挡住后面的书。窗口用中文写出送出几本、失败几本。
-5. 回到书架就能看到新书。架上会显示本数。点封面打开，点「移出」再点一次确认拿走。之后可以关 Wi-Fi，阅读不需要网络。
+5. 回到书架就能看到新书。架上会显示本数。点封面打开。长按封面可以移出或标为读完，移出要点第二次确认。之后可以关 Wi-Fi，阅读不需要网络。
 
 配对码只是避免同网里别人随手上传。传输没有加密。不要在咖啡馆的公共 Wi-Fi 上开着收书页。
 
@@ -144,7 +144,7 @@ Expo Go 没有 TCP 和 Bonjour，不能用来验证传书。必须是上面的 I
 3. 打开 BookShelf，进入「Wi-Fi 传书」，点允许「本地网络」。屏幕上会有 IP、端口和 4 位配对码。
 4. 双击 `windows\BookPush\run.bat` 打开 BookPush（没有 py 启动器也会找 Python312）。同一 Wi-Fi，关掉 VPN，不要用访客网络。搜到手机就选中；列表是 0 台就把那三项填进「手工填写」。防火墙询问时允许 Python 访问专用网络（UDP 5353 和到手机端口的 TCP）。
 5. 在 BookPush 里一次加入 `samples/` 的四本：`window.epub`、`vertical-traditional.epub`、`notes.pdf`、`window-free.azw3`。确认列表是 4 本，移出再加回一本，然后点一次「开始传书」。四本都成功后，待传队列应是空的，不用再手动移出。
-6. 手机书架应显示这四本，标题能读。用搜索框按书名、作者或文件名过滤，排序可以换成书名、作者、进度或最近读过。再点一次「移出」可以拿走其中一本，其余还在。
+6. 手机书架应显示这四本，标题在封面下面。点「搜索」再按书名、作者或文件名过滤。点排序芯片可以换成书名、作者、进度或最近读过。在读的那一本出现在「继续阅读」。长按封面，再点一次「移出」，可以拿走其中一本，其余还在。
 7. 逐本打开。中文应是字形而不是方框：《窗下》能看到「雨下到后半夜」；打开「竖排」后直行仍有字。再打开「简转繁」，繁体样本能看到「窗下有雨」。英文 PDF 能看到 “Notes from a paper shelf”，不是空白页。无 DRM 的 AZW3 能看到「没有数字版权保护」。左右翻页后字形还在。书架上能按未读、阅读中、已完成筛选。
 8. 若另有一本受保护的 AZW3，和别的书一起传：受保护的那本失败并写明「受数字版权保护」，仍留在队列里，标为「失败，可重试」。其余书送到后从队列消失。页面上没有破解提示。再点一次「开始传书」只会重试留下的那本。
 
@@ -175,17 +175,17 @@ node scripts\verify-reader-glyphs.mjs
 
 竖排使用 CSS `writing-mode: vertical-rl`，和简转繁分开。简体正文只有在打开「简转繁」时才按 OpenCC 字词表显示成繁体，原文件不改。个别多义字可能选错，这是显示转换的限制。
 
-翻页是 WebView 里跟手的横滑，松手后大约 260 毫秒落到下一页。每一帧只改 `translate3d`，走合成器，不再做透视折页。透视 `rotateY` 会让整页重绘，中端手机上容易掉帧。菜单的出现和隐藏用 React Native 的 `Animated`（`useNativeDriver: true`），打开菜单不再改 WebView 的高度，所以正文不会跟着重排。书架用 `FlatList`，只挂屏幕里的几本。
+翻页默认是卷页：背面用同一纸色，不是白纸。点一次大约 180 毫秒；连点右侧时这一下会在大约 110 毫秒内结束，多出来的页马上跳过去。也可以在排版里改成滑动或无。系统开了「减少动态效果」时改为大约 200 毫秒的淡入。菜单的出现和隐藏用 React Native 的 `Animated`（`useNativeDriver: true`），打开菜单不再改 WebView 的高度，所以正文不会跟着重排。书架用 `FlatList`，只挂屏幕里的几本，封面是大约 2:3 的三列。
 
 ## iPhone 16e 手测
 
 16e 的逻辑分辨率是 390×844。竖屏安全区大约是顶部 59（灵动岛）和底部 34（Home Indicator），横屏时岛在一侧、底部大约 21。装上未签名 IPA 之后，用同一台手机看这几项：
 
-1. **翻页**：左右滑动要跟手，松手后很快落到下一页，连续翻二十页不卡顿。点左右两侧翻页，点中间收起菜单。竖排时向左滑、或点左侧，进入下一页。PDF、EPUB、无 DRM 的 AZW3 都能翻。有 DRM 的 AZW3 仍停在说明上，没有解密。
+1. **翻页**：点右侧要马上进入下一页，快速连点十几下，页码跟着走，不要卡住，也不要闪出一块白纸。卷页时能看到纸背和折痕阴影，颜色跟日间 / 羊皮纸 / 夜间一致。手指拖动时折痕跟着走。排版里把翻页改成「滑动」或「无」也生效。竖排时点左侧进入下一页。PDF、EPUB、无 DRM 的 AZW3 都能翻。有 DRM 的 AZW3 仍停在说明上，没有解密。
 2. **字体**：系统、苹方、宋体、黑体、楷体、圆体都是字形，不是方框。字号、行距、边距、左对齐 / 两端 / 居中、日间 / 羊皮纸 / 夜间都生效。竖排和简转繁可以单独开关。点「仅本书」改字号后，另一本仍用「全部书籍」的字号；完全退出再打开，两套都还在。
 3. **安全区**：顶部按钮贴在灵动岛下面，不要钻进岛里，也不要空出一大截。正文第一行在岛和状态栏下面。页码和底部菜单在 Home Indicator 上面。打开或关闭菜单时，正文不跳动、不重排。横屏时左右不被圆角和岛挡住。
 4. **状态**：没打开过是「未读」，读过是「阅读中」，读到最后一页或点「标为读完」是「已完成」。书架可以按这三项筛选，并和原来的排序一起用。「标为在读」能把已完成改回去。
-5. **滚动**：书架书多的时候上下滑顺；阅读页连续翻页保持顺滑。
+5. **书架**：一屏能看到的封面比以前多。标题在封面下面，进度是封面底边的一条细线。顶部只有书名、本数和「在读 / 全部 / 未读 / 读完」。搜索默认收起。上下滑仍然顺。
 
 ## 常用命令
 
@@ -210,4 +210,4 @@ py -3 samples\make_samples.py
 
 ## English
 
-BookShelf is an offline Expo reader plus a Windows LAN pusher. Build an unsigned IPA with the GitHub Action `Unsigned iOS IPA`, then install it on Windows with Sideloadly and a free Apple ID. Refresh the signature about every 7 days. Do not buy the Apple Developer Program and do not ship to the App Store. AZW3 support is DRM-free only; encrypted files are refused and never decrypted. Page turns are a compositor `translate3d` slide. Typography, iPhone 16e safe areas, reading status, and the `POST /v1/books` protocol are in `ARCHITECTURE.md`.
+BookShelf is an offline Expo reader plus a Windows LAN pusher. Build an unsigned IPA with the GitHub Action `Unsigned iOS IPA`, then install it on Windows with Sideloadly and a free Apple ID. Refresh the signature about every 7 days. Do not buy the Apple Developer Program and do not ship to the App Store. AZW3 support is DRM-free only; encrypted files are refused and never decrypted. Page turns default to a paper-toned curl (slide or none are optional). Typography, iPhone 16e safe areas, reading status, and the `POST /v1/books` protocol are in `ARCHITECTURE.md`.

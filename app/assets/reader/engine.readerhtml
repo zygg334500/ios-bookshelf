@@ -11,6 +11,9 @@
 <div id="stage" class="booting">
   <div id="under" class="sheet"><div class="pad"><div id="under-html" class="prose"></div><div id="under-pdf" class="pdfwrap" hidden><canvas id="under-canvas"></canvas></div></div><div class="folio" id="under-folio"></div></div>
   <div id="leaf" class="sheet"><div class="pad"><div id="front-html" class="prose"></div><div id="front-pdf" class="pdfwrap" hidden><canvas id="front-canvas"></canvas></div></div><div class="folio" id="front-folio"></div><div id="edge-left" class="edge edge-left"></div><div id="edge-right" class="edge edge-right"></div></div>
+  <div id="fold-shadow" hidden></div>
+  <div id="curl" hidden></div>
+  <canvas id="cache-canvas"></canvas>
   <div id="status" style="display:none">正在排版…</div>
 </div>
 <div id="measure"></div>
@@ -48,6 +51,9 @@
     touch-action: none; user-select: none; -webkit-user-select: none;
     background: var(--paper, transparent);
   }
+  /* 3D curl is flattened by overflow:hidden. Open it only while the mesh is up;
+     the WebView still clips to the screen. */
+  #stage.curling { overflow: visible; }
   #stage.booting .pad { opacity: 0; }
   #stage.shown .pad { opacity: 1; transition: opacity 180ms ease; }
   .sheet {
@@ -59,6 +65,34 @@
   .edge { position: absolute; top: 0; bottom: 0; width: 28px; pointer-events: none; opacity: 0; }
   .edge-left { left: 0; background: linear-gradient(90deg, rgba(40, 24, 10, 0.18), rgba(40, 24, 10, 0)); }
   .edge-right { right: 0; background: linear-gradient(270deg, rgba(40, 24, 10, 0.18), rgba(40, 24, 10, 0)); }
+  /* Curl mesh. Idle reading never uses it: the live leaf stays flat so glyphs stay sharp.
+     The reverse of each strip is the theme paper, not a separate white card. */
+  #curl {
+    position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    perspective: 1800px; -webkit-perspective: 1800px;
+    transform-style: preserve-3d; -webkit-transform-style: preserve-3d;
+  }
+  #curl[hidden] { display: none !important; }
+  #curl .strip {
+    position: absolute; top: 0; bottom: 0;
+    transform-style: preserve-3d; -webkit-transform-style: preserve-3d;
+  }
+  #curl .face {
+    position: absolute; inset: 0; overflow: hidden;
+    background: var(--paper); background-color: var(--paper);
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  }
+  #curl .face.back {
+    transform: rotateY(180deg); -webkit-transform: rotateY(180deg);
+    background: var(--paper); background-color: var(--paper);
+  }
+  #curl .curl-sheet { position: absolute; top: 0; height: 100%; background: transparent; }
+  #fold-shadow {
+    position: absolute; top: 0; bottom: 0; width: 92px; z-index: 3;
+    pointer-events: none; opacity: 0;
+  }
+  #fold-shadow[hidden] { display: none !important; }
+  #cache-canvas { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .pad {
     position: absolute;
     top: calc(var(--safe-top) + var(--chrome-top));
@@ -105,7 +139,8 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
-  #front-html, #under-html, #front-html *, #under-html * {
+  #front-html, #under-html, #front-html *, #under-html *,
+  #curl .prose, #curl .prose * {
     float: none !important;
     position: static !important;
   }
@@ -173,7 +208,7 @@
   #measure.prose { position: absolute; height: auto; }
   #measure .probe { height: auto; display: flow-root; }
   .pdfwrap { height: 100%; display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; background: white; box-shadow: 0 10px 28px rgba(40, 24, 10, 0.14); border-radius: 1px; }
+  canvas { display: block; background: var(--paper); box-shadow: 0 10px 28px rgba(40, 24, 10, 0.14); border-radius: 1px; }
   #status {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-family: "PingFang SC", "Heiti SC", "Songti SC", serif;
@@ -226,7 +261,24 @@
   var underCanvas = document.getElementById('under-canvas');
   var frontFolio = document.getElementById('front-folio');
   var underFolio = document.getElementById('under-folio');
+  var curlRoot = document.getElementById('curl');
+  var foldShadow = document.getElementById('fold-shadow');
+  var cacheCanvas = document.getElementById('cache-canvas');
   var motion = 0;
+  var pending = 0;
+  var anim = null;
+  var curlStrips = [];
+  var meshWidth = 0;
+  var meshRadius = 32;
+  var cachePage = -1;
+  var cacheToken = 0;
+  var TAP_CURL_MS = 180;
+  var HURRY_MS = 110;
+  var SLIDE_MS = 170;
+  var SLIDE_HURRY_MS = 100;
+  var FADE_MS = 200;
+  var STRIP_COUNT = 8;
+  var reduceQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
   function post(message) {
     message.source = 'bookshelf';
@@ -256,7 +308,8 @@
       theme: raw.theme && THEMES[raw.theme] ? raw.theme : 'sepia',
       vertical: typeof raw.vertical === 'boolean' ? raw.vertical : legacy,
       traditional: typeof raw.traditional === 'boolean' ? raw.traditional : legacy,
-      brightness: num(raw.brightness, 0.55, 1, 1)
+      brightness: num(raw.brightness, 0.55, 1, 1),
+      pageTurn: raw.pageTurn === 'slide' || raw.pageTurn === 'none' || raw.pageTurn === 'curl' ? raw.pageTurn : 'curl'
     };
   }
 
@@ -553,6 +606,7 @@
     } else if (stage.clientHeight >= 48) {
       state.layoutTries = 0;
     }
+    warmNeighbors();
     report();
   }
 
@@ -572,12 +626,64 @@
     return { chapter: chapter, page: dir > 0 ? 0 : Math.max(0, other.length - 1) };
   }
 
+  function neighborFrom(origin, dir) {
+    if (!origin) return null;
+    if (state.kind === 'pdf') {
+      var count = state.pdf ? state.pdf.numPages : 1;
+      var pdfPage = origin.page + dir;
+      if (pdfPage < 0 || pdfPage >= count) return null;
+      return { chapter: 0, page: pdfPage };
+    }
+    var originPages = pagesFor(origin.chapter);
+    var originPage = origin.page + dir;
+    if (originPage >= 0 && originPage < originPages.length) return { chapter: origin.chapter, page: originPage };
+    var originChapter = origin.chapter + dir;
+    if (originChapter < 0 || originChapter >= state.chapters.length) return null;
+    var originOther = pagesFor(originChapter);
+    return { chapter: originChapter, page: dir > 0 ? 0 : Math.max(0, originOther.length - 1) };
+  }
+
+  function blitCanvas(src, dst) {
+    if (!src || !dst || src.width <= 0 || src.height <= 0) return false;
+    dst.width = src.width;
+    dst.height = src.height;
+    dst.style.width = src.style.width;
+    dst.style.height = src.style.height;
+    var ctx = dst.getContext('2d');
+    if (!ctx) return false;
+    ctx.drawImage(src, 0, 0);
+    return true;
+  }
+
+  function warmNeighbors() {
+    var ahead = neighbor(1);
+    var behind = neighbor(-1);
+    if (state.kind === 'html') {
+      if (ahead) pagesFor(ahead.chapter);
+      if (behind) pagesFor(behind.chapter);
+      var further = neighborFrom(ahead, 1);
+      if (further) pagesFor(further.chapter);
+      return;
+    }
+    if (state.kind === 'pdf' && state.pdf && behind && cachePage !== behind.page) {
+      var wanted = behind.page;
+      var token = ++cacheToken;
+      var scratch = document.createElement('canvas');
+      renderPdf(wanted + 1, scratch).then(function () {
+        if (token !== cacheToken) return;
+        if (blitCanvas(scratch, cacheCanvas)) cachePage = wanted;
+      });
+    }
+  }
+
   function paintUnder(dest) {
     if (!dest) return;
     if (state.kind === 'pdf') {
       underPdf.hidden = false;
       underHtml.hidden = true;
-      renderPdf(dest.page + 1, underCanvas);
+      if (!(cachePage === dest.page && blitCanvas(cacheCanvas, underCanvas))) {
+        renderPdf(dest.page + 1, underCanvas);
+      }
       underFolio.textContent = String(dest.page + 1);
       return;
     }
@@ -607,14 +713,6 @@
     var value = amount <= 0.01 ? '0' : String(Math.max(0, Math.min(0.9, amount)));
     edgeRight.style.opacity = dir > 0 ? value : '0';
     edgeLeft.style.opacity = dir > 0 ? '0' : value;
-  }
-
-  function restLeaf() {
-    motion += 1;
-    setLeafX(0);
-    paintEdge(0, 1);
-    leaf.style.transformStyle = 'flat';
-    leaf.style.webkitTransformStyle = 'flat';
   }
 
   function commit(dest) {
@@ -648,6 +746,7 @@
       leaf.style.webkitTransformStyle = 'flat';
       var nxt = neighbor(1);
       if (nxt) renderPdf(nxt.page + 1, underCanvas);
+      warmNeighbors();
       report();
       return;
     }
@@ -666,42 +765,397 @@
     leaf.style.webkitTransformStyle = 'flat';
     var follow = neighbor(1);
     if (follow) paintUnder(follow);
+    warmNeighbors();
     revealInk();
     report();
   }
 
-  // Each frame writes translate3d only. A perspective fold repaints the WebView and drops frames.
-  function glideLeaf(from, to, dir, done) {
+  function restLeaf() {
+    motion += 1;
+    anim = null;
+    setLeafX(0);
+    paintEdge(0, 1);
+    leaf.style.opacity = '1';
+    leaf.style.visibility = 'visible';
+    leaf.style.transformStyle = 'flat';
+    leaf.style.webkitTransformStyle = 'flat';
+    stage.classList.remove('curling');
+    curlStrips = [];
+    if (curlRoot) {
+      curlRoot.innerHTML = '';
+      curlRoot.hidden = true;
+    }
+    if (foldShadow) {
+      foldShadow.hidden = true;
+      foldShadow.style.opacity = '0';
+    }
+  }
+
+  function hardCancel() {
+    pending = 0;
+    drag = null;
+    restLeaf();
+  }
+
+  function reducedMotion() {
+    return !!(reduceQuery && reduceQuery.matches);
+  }
+
+  function effectFor(mode, reduced) {
+    if (reduced) return 'fade';
+    if (mode === 'none') return 'none';
+    if (mode === 'slide') return 'slide';
+    return 'curl';
+  }
+
+  function durationFor(effect, hurry) {
+    if (effect === 'none') return 0;
+    if (effect === 'fade') return FADE_MS;
+    if (effect === 'slide') return hurry ? SLIDE_HURRY_MS : SLIDE_MS;
+    return hurry ? HURRY_MS : TAP_CURL_MS;
+  }
+
+  function hurryCap(kind) {
+    if (kind === 'slide') return SLIDE_HURRY_MS;
+    if (kind === 'fade') return 140;
+    return HURRY_MS;
+  }
+
+  function hurryAnim() {
+    if (!anim) return;
+    var cap = hurryCap(anim.kind);
+    var elapsed = performance.now() - anim.began;
+    anim.duration = elapsed >= cap ? elapsed : cap;
+  }
+
+  function planAfter(waiting) {
+    if (!waiting) return { snap: 0, dir: 0 };
+    var dir = waiting > 0 ? 1 : -1;
+    var count = Math.abs(waiting);
+    if (count === 1) return { snap: 0, dir: dir };
+    return { snap: count - 1, dir: dir };
+  }
+
+  function onTurnSettled() {
+    if (drag || anim) return;
+    var plan = planAfter(pending);
+    pending = 0;
+    if (!plan.dir) return;
+    var dir = plan.dir;
+    for (var i = 0; i < plan.snap; i++) {
+      var extra = neighbor(dir);
+      if (!extra) return;
+      commit(extra);
+    }
+    if (!neighbor(dir)) return;
+    beginTurn(dir, false);
+  }
+
+  function finishAnim() {
+    var current = anim;
+    if (!current) return;
+    anim = null;
+    if (current.land && current.dest) commit(current.dest);
+    restLeaf();
+    if (!drag) onTurnSettled();
+  }
+
+  function paperTone() {
+    return (THEMES[state.settings.theme] || THEMES.sepia).paper;
+  }
+
+  function backShade() {
+    if (state.settings.theme === 'dark') {
+      return 'linear-gradient(90deg, rgba(255,255,255,0.08), rgba(0,0,0,0.42) 52%, rgba(255,255,255,0.05))';
+    }
+    return 'linear-gradient(90deg, rgba(255,250,242,0.5), rgba(62,40,18,0.18) 46%, rgba(255,248,240,0.22) 68%, rgba(40,24,10,0.22))';
+  }
+
+  function cloneSheetContent(width) {
+    var wrap = document.createElement('div');
+    wrap.className = 'curl-sheet' + (isVertical() ? ' vertical' : '');
+    wrap.style.width = width + 'px';
+    wrap.style.left = '0px';
+    var pad = leaf.querySelector('.pad');
+    if (pad) {
+      var padClone = pad.cloneNode(true);
+      padClone.removeAttribute('id');
+      var labelled = padClone.querySelectorAll('[id]');
+      for (var i = 0; i < labelled.length; i++) labelled[i].removeAttribute('id');
+      var srcCanvas = pad.querySelector('canvas');
+      var dstCanvas = padClone.querySelector('canvas');
+      if (srcCanvas && dstCanvas && srcCanvas.width > 0) {
+        dstCanvas.width = srcCanvas.width;
+        dstCanvas.height = srcCanvas.height;
+        dstCanvas.style.width = srcCanvas.style.width;
+        dstCanvas.style.height = srcCanvas.style.height;
+        var ctx = dstCanvas.getContext('2d');
+        if (ctx) ctx.drawImage(srcCanvas, 0, 0);
+      }
+      wrap.appendChild(padClone);
+    }
+    if (frontFolio) {
+      var folioClone = frontFolio.cloneNode(true);
+      folioClone.removeAttribute('id');
+      wrap.appendChild(folioClone);
+    }
+    return wrap;
+  }
+
+  function pdfSlice(index, sw, cssW, pageW, pageH, paper) {
+    var canvas = document.createElement('canvas');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.round(cssW * dpr));
+    canvas.height = Math.max(1, Math.round(pageH * dpr));
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = pageH + 'px';
+    var ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = paper;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (frontCanvas && frontCanvas.width > 0) {
+        var srcRect = frontCanvas.getBoundingClientRect();
+        var stageRect = stage.getBoundingClientRect();
+        var srcX = srcRect.left - stageRect.left;
+        var srcY = srcRect.top - stageRect.top;
+        var sliceLeft = index * sw;
+        var overlapL = Math.max(sliceLeft, srcX);
+        var overlapR = Math.min(sliceLeft + cssW, srcX + srcRect.width);
+        if (overlapR > overlapL && srcRect.width > 0 && srcRect.height > 0) {
+          var sx = ((overlapL - srcX) / srcRect.width) * frontCanvas.width;
+          var sWidth = ((overlapR - overlapL) / srcRect.width) * frontCanvas.width;
+          try {
+            ctx.drawImage(
+              frontCanvas,
+              sx, 0, sWidth, frontCanvas.height,
+              (overlapL - sliceLeft) * dpr, srcY * dpr,
+              (overlapR - overlapL) * dpr, srcRect.height * dpr
+            );
+          } catch (err) {}
+        }
+      }
+    }
+    return canvas;
+  }
+
+  function buildMesh() {
+    curlStrips = [];
+    if (!curlRoot) return;
+    curlRoot.innerHTML = '';
+    var width = Math.max(stage.clientWidth, 1);
+    var height = Math.max(stage.clientHeight, 1);
+    meshWidth = width;
+    meshRadius = Math.max(24, Math.min(46, Math.round(width * 0.075)));
+    var sw = width / STRIP_COUNT;
+    var paper = paperTone();
+    var shade = backShade();
+    var htmlMode = state.kind !== 'pdf';
+    var master = htmlMode ? cloneSheetContent(width) : null;
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < STRIP_COUNT; i++) {
+      var strip = document.createElement('div');
+      strip.className = 'strip';
+      var cssW = Math.ceil(sw + 1);
+      strip.style.left = (i * sw) + 'px';
+      strip.style.width = cssW + 'px';
+      strip.style.willChange = 'transform';
+      var front = document.createElement('div');
+      front.className = 'face front';
+      front.style.backgroundColor = paper;
+      front.style.transform = 'rotateY(0deg)';
+      if (htmlMode && master) {
+        var piece = i === STRIP_COUNT - 1 ? master : master.cloneNode(true);
+        piece.style.left = (-i * sw) + 'px';
+        piece.style.width = width + 'px';
+        front.appendChild(piece);
+      } else {
+        front.appendChild(pdfSlice(i, sw, cssW, width, height, paper));
+      }
+      var back = document.createElement('div');
+      back.className = 'face back';
+      back.style.backgroundColor = paper;
+      back.style.backgroundImage = shade;
+      back.style.backgroundSize = width + 'px 100%';
+      back.style.backgroundPosition = (-i * sw) + 'px 0';
+      strip.appendChild(front);
+      strip.appendChild(back);
+      frag.appendChild(strip);
+      curlStrips.push(strip);
+    }
+    curlRoot.appendChild(frag);
+    curlRoot.hidden = false;
+    stage.classList.add('curling');
+    leaf.style.visibility = 'hidden';
+    if (foldShadow) foldShadow.hidden = false;
+  }
+
+  function peelFromRight(dir) {
+    return isVertical() ? dir < 0 : dir > 0;
+  }
+
+  function showFlat(strip, x, fromRight) {
+    strip.style.visibility = 'visible';
+    strip.style.left = x + 'px';
+    strip.style.transformOrigin = fromRight ? '0% 50%' : '100% 50%';
+    strip.style.transform = 'rotateY(0deg)';
+    strip.style.webkitTransform = 'rotateY(0deg)';
+  }
+
+  function showRot(strip, x, origin, deg) {
+    strip.style.visibility = 'visible';
+    strip.style.left = (Math.round(x * 10) / 10) + 'px';
+    strip.style.transformOrigin = origin;
+    var value = 'rotateY(' + deg.toFixed(2) + 'deg) translateZ(0.1px)';
+    strip.style.transform = value;
+    strip.style.webkitTransform = value;
+  }
+
+  function setCurl(u, dir) {
+    if (!curlStrips.length) buildMesh();
+    var width = meshWidth || Math.max(stage.clientWidth, 1);
+    var sw = width / curlStrips.length;
+    var radius = meshRadius || 32;
+    var travel = width + Math.PI * radius;
+    var fromRight = peelFromRight(dir);
+    var clamped = Math.max(0, Math.min(1, u));
+    var foldX = fromRight ? width - clamped * travel : clamped * travel;
+    for (var i = 0; i < curlStrips.length; i++) {
+      var strip = curlStrips[i];
+      var x0 = i * sw;
+      if (clamped <= 0.001) {
+        showFlat(strip, x0, fromRight);
+        continue;
+      }
+      if (fromRight) {
+        if (x0 + sw <= foldX + 0.5) { showFlat(strip, x0, true); continue; }
+        if (x0 >= foldX + Math.PI * radius) { strip.style.visibility = 'hidden'; continue; }
+        var theta = Math.max(0, (x0 - foldX) / radius);
+        if (theta >= Math.PI - 0.02) { strip.style.visibility = 'hidden'; continue; }
+        showRot(strip, foldX + Math.sin(theta) * radius, '0% 50%', -theta * 180 / Math.PI);
+      } else {
+        if (x0 >= foldX - 0.5) { showFlat(strip, x0, false); continue; }
+        if (x0 + sw <= foldX - Math.PI * radius) { strip.style.visibility = 'hidden'; continue; }
+        var thetaL = Math.max(0, (foldX - (x0 + sw)) / radius);
+        if (thetaL >= Math.PI - 0.02) { strip.style.visibility = 'hidden'; continue; }
+        showRot(strip, foldX - Math.sin(thetaL) * radius - sw, '100% 50%', thetaL * 180 / Math.PI);
+      }
+    }
+    if (foldShadow) {
+      var crease = Math.max(-30, Math.min(width - 20, foldX));
+      var strength = Math.sin(clamped * Math.PI);
+      var dark = state.settings.theme === 'dark';
+      var ink = dark ? '0,0,0' : '48,28,12';
+      var alpha = dark ? 0.55 : 0.28;
+      foldShadow.style.background = fromRight
+        ? 'linear-gradient(90deg, rgba(' + ink + ',' + alpha + '), rgba(' + ink + ',0.06) 46%, rgba(' + ink + ',0))'
+        : 'linear-gradient(270deg, rgba(' + ink + ',' + alpha + '), rgba(' + ink + ',0.06) 46%, rgba(' + ink + ',0))';
+      foldShadow.style.opacity = clamped <= 0.001 ? '0' : String(0.25 + 0.75 * strength);
+      var shadowX = fromRight ? crease - 8 : crease - 78;
+      var shadowShift = 'translate3d(' + Math.round(shadowX) + 'px,0,0)';
+      foldShadow.style.transform = shadowShift;
+      foldShadow.style.webkitTransform = shadowShift;
+    }
+  }
+
+  function animateCurl(from, to, duration, dir, dest) {
+    if (!curlRoot) {
+      glideRelease(0, offsetFor(dir, Math.max(stage.clientWidth, 1)), dir, dest, duration);
+      return;
+    }
+    if (!curlStrips.length) buildMesh();
     var token = ++motion;
     var began = performance.now();
-    var duration = 260;
-    var finished = false;
-    function finish() {
-      if (finished || token !== motion) return;
-      finished = true;
-      setLeafX(to);
-      done();
-    }
+    anim = { token: token, began: began, duration: duration, dir: dir, dest: dest, kind: 'curl', land: !!(dest && to > 0.5) };
     function step(now) {
-      if (finished || token !== motion) return;
-      var t = Math.min(1, (now - began) / duration);
+      if (!anim || anim.token !== token) return;
+      var dur = Math.max(1, anim.duration);
+      var t = Math.min(1, (now - began) / dur);
+      var eased = 1 - Math.pow(1 - t, 3);
+      setCurl(from + (to - from) * eased, dir);
+      if (t < 1) requestAnimationFrame(step);
+      else finishAnim();
+    }
+    requestAnimationFrame(step);
+    setTimeout(function () {
+      if (anim && anim.token === token) finishAnim();
+    }, Math.max(duration, TAP_CURL_MS) + 120);
+  }
+
+  function glideRelease(from, to, dir, dest, duration) {
+    var token = ++motion;
+    var began = performance.now();
+    anim = { token: token, began: began, duration: duration, dir: dir, dest: dest, kind: 'slide', land: !!dest };
+    function step(now) {
+      if (!anim || anim.token !== token) return;
+      var dur = Math.max(1, anim.duration);
+      var t = Math.min(1, (now - began) / dur);
       var eased = 1 - Math.pow(1 - t, 3);
       var x = from + (to - from) * eased;
       setLeafX(x);
       paintEdge(Math.abs(x) / Math.max(stage.clientWidth, 1), dir);
       if (t < 1) requestAnimationFrame(step);
-      else finish();
+      else finishAnim();
     }
     requestAnimationFrame(step);
-    setTimeout(finish, duration + 50);
+    setTimeout(function () {
+      if (anim && anim.token === token) finishAnim();
+    }, duration + 80);
   }
+
+  function startFade(dest, duration) {
+    paintUnder(dest);
+    var token = ++motion;
+    var began = performance.now();
+    anim = { token: token, began: began, duration: Math.min(220, duration), dir: 1, dest: dest, kind: 'fade', land: true };
+    function step(now) {
+      if (!anim || anim.token !== token) return;
+      var dur = Math.max(1, Math.min(220, anim.duration));
+      var t = Math.min(1, (now - began) / dur);
+      leaf.style.opacity = String(1 - t);
+      if (t < 1) requestAnimationFrame(step);
+      else finishAnim();
+    }
+    requestAnimationFrame(step);
+    setTimeout(function () {
+      if (anim && anim.token === token) finishAnim();
+    }, 260);
+  }
+
+  function beginTurn(dir, hurried) {
+    var dest = neighbor(dir);
+    if (!dest) return;
+    var effect = effectFor(state.settings.pageTurn, reducedMotion());
+    var duration = durationFor(effect, hurried);
+    if (effect === 'none' || duration === 0) {
+      paintUnder(dest);
+      commit(dest);
+      onTurnSettled();
+      return;
+    }
+    if (effect === 'fade') {
+      startFade(dest, duration);
+      return;
+    }
+    if (effect === 'slide') {
+      paintUnder(dest);
+      glideRelease(0, offsetFor(dir, Math.max(stage.clientWidth, 1)), dir, dest, duration);
+      return;
+    }
+    paintUnder(dest);
+    animateCurl(0, 1, duration, dir, dest);
+  }
+
+  // Slide frames only write translate3d. Curl frames only write rotateY on the strip mesh.
+  // The mesh is removed when the page rests, so idle text is not stuck on a 3D layer.
 
   function renderPdf(pageNumber, canvas) {
     if (!state.pdf) return Promise.resolve();
     return state.pdf.getPage(pageNumber).then(function (page) {
-      var wrap = canvas.parentElement;
-      var maxW = wrap.clientWidth || stage.clientWidth - 48;
-      var maxH = wrap.clientHeight || stage.clientHeight - 64;
+    var wrap = canvas.parentElement && canvas.parentElement.clientWidth > 2
+      ? canvas.parentElement
+      : (frontCanvas.parentElement || stage);
+    var maxW = (wrap && wrap.clientWidth) || stage.clientWidth - 48;
+    var maxH = (wrap && wrap.clientHeight) || stage.clientHeight - 64;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
       var base = page.getViewport({ scale: 1 });
       var fit = Math.min(maxW / base.width, maxH / base.height);
@@ -713,7 +1167,7 @@
       canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
       var context = canvas.getContext('2d');
       return page.render({ canvasContext: context, viewport: viewport }).promise.then(function () {
-        if (!state.coverSent && pageNumber === 1) {
+        if (!state.coverSent && pageNumber === 1 && canvas === frontCanvas) {
           state.coverSent = true;
           try {
             var thumb = document.createElement('canvas');
@@ -754,6 +1208,7 @@
       }).then(function () {
         frontFolio.textContent = String(state.page + 1);
         revealInk();
+        warmNeighbors();
         report();
       });
     }).catch(function (error) {
@@ -771,6 +1226,7 @@
   }
 
   function loadBook(message) {
+    hardCancel();
     state.cache = {};
     state.coverSent = false;
     if (message.insets) setInsets(message.insets);
@@ -794,6 +1250,7 @@
   }
 
   function gotoProgress(progress) {
+    hardCancel();
     var p = Math.max(0, Math.min(0.999, progress));
     if (state.kind === 'pdf' && state.pdf) {
       var page = Math.min(state.pdf.numPages - 1, Math.floor(p * state.pdf.numPages));
@@ -809,6 +1266,7 @@
   }
 
   function reflow(fraction) {
+    hardCancel();
     state.cache = {};
     applyTheme();
     if (state.kind === 'html') {
@@ -849,6 +1307,7 @@
       if (layoutStamp() !== insetBefore) reflow(insetFraction);
     }
     if (data.type === 'goto') {
+      hardCancel();
       if (typeof data.progress === 'number') gotoProgress(data.progress);
       else commit({ chapter: data.chapterIndex || 0, page: data.pageIndex || 0 });
     }
@@ -880,7 +1339,6 @@
 
   var drag = null;
   stage.addEventListener('pointerdown', function (event) {
-    if (state.busy) return;
     drag = {
       x: event.clientX,
       y: event.clientY,
@@ -891,28 +1349,51 @@
       vx: 0,
       offset: 0,
       dir: 0,
-      painted: false
+      painted: false,
+      effect: effectFor(state.settings.pageTurn, reducedMotion())
     };
   });
   window.addEventListener('pointermove', function (event) {
-    if (!drag || state.busy) return;
+    if (!drag) return;
     var dx = event.clientX - drag.x;
     var dy = event.clientY - drag.y;
     if (!drag.moved && (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy))) return;
-    drag.moved = true;
+    if (!drag.moved) {
+      drag.moved = true;
+      pending = 0;
+      if (anim) {
+        anim = null;
+        motion += 1;
+      }
+      leaf.style.opacity = '1';
+    }
     var dir = dirFromDx(dx) || drag.dir || 1;
     drag.dir = dir;
     var dest = neighbor(dir);
     var width = Math.max(stage.clientWidth, 1);
-    var x = dest ? Math.max(-width, Math.min(width, dx)) : dx * 0.2;
     if (dest && (!drag.painted || drag.paintedDir !== dir)) {
       drag.painted = true;
       drag.paintedDir = dir;
       paintUnder(dest);
     }
-    drag.offset = x;
-    setLeafX(x);
-    paintEdge(Math.min(1, Math.abs(x) / width), dir);
+    if (drag.effect === 'fade') return;
+    if (drag.effect === 'curl' && dest) {
+      if (!curlStrips.length) buildMesh();
+      var u = Math.max(0, Math.min(1, Math.abs(dx) / width));
+      drag.offset = u;
+      setCurl(u, dir);
+    } else {
+      if (curlStrips.length) {
+        curlStrips = [];
+        if (curlRoot) { curlRoot.innerHTML = ''; curlRoot.hidden = true; }
+        stage.classList.remove('curling');
+        leaf.style.visibility = 'visible';
+      }
+      var x = dest ? Math.max(-width, Math.min(width, dx)) : dx * 0.2;
+      drag.offset = x;
+      setLeafX(x);
+      paintEdge(Math.min(1, Math.abs(x) / width), dir);
+    }
     var now = performance.now();
     var dt = Math.max(1, now - drag.lt);
     drag.vx = (event.clientX - drag.lx) / dt;
@@ -926,13 +1407,13 @@
     var start = drag;
     drag = null;
     if (!start.moved) {
-      var x = start.x / width;
+      var zone = start.x / width;
       var vertical = isVertical();
-      if (vertical ? x < 0.22 : x > 0.78) turn(1);
-      else if (vertical ? x > 0.78 : x < 0.22) turn(-1);
+      if (vertical ? zone < 0.22 : zone > 0.78) turn(1);
+      else if (vertical ? zone > 0.78 : zone < 0.22) turn(-1);
       else {
         post({ type: 'chrome' });
-        restLeaf();
+        if (!anim) restLeaf();
       }
       return;
     }
@@ -940,34 +1421,36 @@
     var dest = neighbor(dir);
     var flick = start.vx || 0;
     var should = !!(dest && (Math.abs(dx) > width * 0.18 || Math.abs(flick) > 0.55));
-    var from = start.offset || 0;
-    if (!should) {
-      state.busy = true;
-      glideLeaf(from, 0, dir, function () {
-        state.busy = false;
-        restLeaf();
-      });
+    if (start.effect === 'fade') {
+      if (should) beginTurn(dir, false);
+      else if (!anim) restLeaf();
       return;
     }
-    state.busy = true;
-    glideLeaf(from, offsetFor(dir, width), dir, function () {
-      state.busy = false;
-      commit(dest);
-    });
+    if (start.effect === 'none') {
+      if (should) commit(dest);
+      else restLeaf();
+      return;
+    }
+    if (start.effect === 'curl' && curlStrips.length) {
+      var fromU = typeof start.offset === 'number' ? Math.max(0, Math.min(1, start.offset)) : 0;
+      if (!should) animateCurl(fromU, 0, 160, dir, null);
+      else animateCurl(fromU, 1, 190, dir, dest);
+      return;
+    }
+    var from = typeof start.offset === 'number' ? start.offset : 0;
+    if (!should) glideRelease(from, 0, dir, null, 160);
+    else glideRelease(from, offsetFor(dir, width), dir, dest, 190);
   }
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
 
   function turn(dir) {
-    var dest = neighbor(dir);
-    if (!dest || state.busy) return;
-    paintUnder(dest);
-    state.busy = true;
-    var width = Math.max(stage.clientWidth, 1);
-    glideLeaf(0, offsetFor(dir, width), dir, function () {
-      state.busy = false;
-      commit(dest);
-    });
+    if (anim) {
+      pending += dir;
+      hurryAnim();
+      return;
+    }
+    beginTurn(dir, false);
   }
 
   window.addEventListener('keydown', function (event) {
