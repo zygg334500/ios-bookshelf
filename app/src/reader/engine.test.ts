@@ -43,9 +43,26 @@ describe('reader engine', () => {
     expect(html).toContain("back.className = 'face back'");
     expect(html).toContain('backgroundColor = paper');
     expect(html).toContain('pageTurn');
+    expect(html).toContain('#leaf.curl-source-off');
+    expect(html).toContain('opacity: 0 !important');
+    expect(html).toContain("leaf.classList.add('curl-source-off')");
+    expect(html).toContain("leaf.classList.remove('curl-source-off')");
+    expect(html).toContain('#curl .strip.gone');
+    expect(html).toContain('display: none !important');
+    expect(html).toContain('#curl .strip.show-back .face.front');
+    expect(html).toContain('face-clip');
+    expect(html).toContain('transition: none !important');
+    expect(html).toContain('under.style.clipPath');
+    expect(html).toContain("strip.className = 'strip gone'");
     expect(html).not.toContain('background: white');
     expect(html).not.toContain("backgroundColor = '#fff'");
     expect(html).not.toContain('backgroundColor = "white"');
+  });
+
+  it('parses the reader script', () => {
+    const src = html.split('<script>').pop()?.split('</script>')[0] ?? '';
+    expect(src).toContain('function buildMesh');
+    expect(() => new Function(src)).not.toThrow();
   });
 
   it('drops blank pages and still hides the opening overlay', () => {
